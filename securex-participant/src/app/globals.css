@@ -1,0 +1,694 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+/* ============================================================
+   SECUREX — Design System
+   Dark Security Platform — LeetCode + HackerRank + Web3
+   ============================================================ */
+
+:root {
+  /* Brand */
+  --sx-bg-base: #0a0e1a;
+  --sx-bg-surface: #0f1524;
+  --sx-bg-card: #131a2e;
+  --sx-bg-elevated: #1a2440;
+  --sx-bg-hover: #1f2d4d;
+
+  --sx-border: rgba(255, 255, 255, 0.06);
+  --sx-border-strong: rgba(255, 255, 255, 0.12);
+
+  /* Accent */
+  --sx-accent: #3b82f6;          /* primary blue */
+  --sx-accent-glow: rgba(59, 130, 246, 0.15);
+  --sx-accent-2: #06b6d4;        /* cyan */
+  --sx-accent-3: #8b5cf6;        /* violet */
+
+  /* Difficulty */
+  --sx-easy: #34d399;
+  --sx-medium: #fbbf24;
+  --sx-hard: #f87171;
+  --sx-expert: #a78bfa;
+
+  /* Status */
+  --sx-verified: #34d399;
+  --sx-failed: #f87171;
+  --sx-pending: #fbbf24;
+  --sx-review: #60a5fa;
+
+  /* Text */
+  --sx-text-primary: #f1f5f9;
+  --sx-text-secondary: #94a3b8;
+  --sx-text-muted: #475569;
+
+  /* Fonts */
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+@theme inline {
+  --color-background: var(--sx-bg-base);
+  --color-foreground: var(--sx-text-primary);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+}
+
+/* ============================================================
+   Base Styles
+   ============================================================ */
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: var(--sx-bg-base);
+  color: var(--sx-text-primary);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+/* ============================================================
+   Scrollbar
+   ============================================================ */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--sx-bg-surface);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--sx-bg-elevated);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--sx-bg-hover);
+}
+
+/* ============================================================
+   Selection
+   ============================================================ */
+
+::selection {
+  background: rgba(59, 130, 246, 0.3);
+  color: #f1f5f9;
+}
+
+/* ============================================================
+   Typography
+   ============================================================ */
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+code, pre, kbd {
+  font-family: var(--font-mono);
+}
+
+/* ============================================================
+   Glassmorphism utility
+   ============================================================ */
+
+.glass {
+  background: rgba(15, 21, 36, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--sx-border);
+}
+
+.glass-strong {
+  background: rgba(19, 26, 46, 0.9);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--sx-border-strong);
+}
+
+/* ============================================================
+   Glow effects
+   ============================================================ */
+
+.glow-blue {
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.15), 0 0 40px rgba(59, 130, 246, 0.05);
+}
+
+.glow-green {
+  box-shadow: 0 0 20px rgba(52, 211, 153, 0.15), 0 0 40px rgba(52, 211, 153, 0.05);
+}
+
+.glow-violet {
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.15), 0 0 40px rgba(139, 92, 246, 0.05);
+}
+
+/* ============================================================
+   Gradient text
+   ============================================================ */
+
+.gradient-text {
+  background: linear-gradient(135deg, #60a5fa, #818cf8, #a78bfa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-text-green {
+  background: linear-gradient(135deg, #34d399, #06b6d4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ============================================================
+   Card styles
+   ============================================================ */
+
+.sx-card {
+  background: var(--sx-bg-card);
+  border: 1px solid var(--sx-border);
+  border-radius: 12px;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+
+.sx-card:hover {
+  border-color: var(--sx-border-strong);
+}
+
+.sx-card-interactive:hover {
+  border-color: rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 24px rgba(59, 130, 246, 0.08);
+  transform: translateY(-1px);
+}
+
+/* ============================================================
+   Badge / Pill
+   ============================================================ */
+
+.sx-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border: 1px solid transparent;
+}
+
+.sx-badge-easy {
+  background: rgba(52, 211, 153, 0.1);
+  color: var(--sx-easy);
+  border-color: rgba(52, 211, 153, 0.2);
+}
+
+.sx-badge-medium {
+  background: rgba(251, 191, 36, 0.1);
+  color: var(--sx-medium);
+  border-color: rgba(251, 191, 36, 0.2);
+}
+
+.sx-badge-hard {
+  background: rgba(248, 113, 113, 0.1);
+  color: var(--sx-hard);
+  border-color: rgba(248, 113, 113, 0.2);
+}
+
+.sx-badge-expert {
+  background: rgba(167, 139, 250, 0.1);
+  color: var(--sx-expert);
+  border-color: rgba(167, 139, 250, 0.2);
+}
+
+.sx-badge-verified {
+  background: rgba(52, 211, 153, 0.1);
+  color: var(--sx-verified);
+  border-color: rgba(52, 211, 153, 0.2);
+}
+
+.sx-badge-failed {
+  background: rgba(248, 113, 113, 0.1);
+  color: var(--sx-failed);
+  border-color: rgba(248, 113, 113, 0.2);
+}
+
+.sx-badge-pending {
+  background: rgba(251, 191, 36, 0.1);
+  color: var(--sx-pending);
+  border-color: rgba(251, 191, 36, 0.2);
+}
+
+.sx-badge-review {
+  background: rgba(96, 165, 250, 0.1);
+  color: var(--sx-review);
+  border-color: rgba(96, 165, 250, 0.2);
+}
+
+/* ============================================================
+   Input — base
+   ============================================================ */
+
+.sx-input {
+  background: var(--sx-bg-elevated);
+  border: 1px solid var(--sx-border-strong);
+  border-radius: 8px;
+  color: var(--sx-text-primary);
+  padding: 10px 14px;
+  font-size: 0.875rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  width: 100%;
+  outline: none;
+  /* Ensure box-sizing so padding does not cause overflow */
+  box-sizing: border-box;
+}
+
+.sx-input::placeholder {
+  color: var(--sx-text-muted);
+}
+
+.sx-input:focus {
+  border-color: var(--sx-accent);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/*
+ * Icon-aware padding modifiers
+ * ----------------------------
+ * Use these instead of Tailwind pl-9 / pr-9 so that the
+ * padding is guaranteed by the design system and cannot be
+ * overridden by specificity conflicts.
+ *
+ * Layout:  LEFT EDGE (12px) → ICON (16px) → GAP (8px) → TEXT
+ *          Total left padding  = 12 + 16 + 8 = 36px
+ *
+ * Trailing icon (eye, clear-X):
+ *          TEXT  →  GAP (8px) → ICON (16px) → RIGHT EDGE (12px)
+ *          Total right padding = 8 + 16 + 12 = 36px
+ */
+
+.sx-input-icon-left {
+  padding-left: 2.5rem !important; /* 40px — icon(16px) + left-inset(12px) + gap(12px) */
+}
+
+.sx-input-icon-right {
+  padding-right: 2.5rem !important; /* 40px — same logic, trailing side */
+}
+
+/*
+ * Input wrapper
+ * -------------
+ * Wraps the icon(s) + input. The icon is absolute-positioned
+ * inside this relative container.
+ *
+ * Usage:
+ *   <div class="sx-input-wrapper">
+ *     <SearchIcon class="sx-input-leading-icon" />
+ *     <input class="sx-input sx-input-icon-left" />
+ *   </div>
+ */
+
+.sx-input-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+/* Leading icon — vertically centred, left-inset */
+.sx-input-leading-icon {
+  position: absolute;
+  left: 0.75rem;        /* 12px from left edge */
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1rem;          /* 16px — matches size={16} */
+  height: 1rem;
+  color: var(--sx-text-muted);
+  pointer-events: none; /* never blocks clicks on the input */
+  flex-shrink: 0;
+}
+
+/* Trailing icon — vertically centred, right-inset */
+.sx-input-trailing-icon {
+  position: absolute;
+  right: 0.75rem;       /* 12px from right edge */
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1rem;
+  height: 1rem;
+  color: var(--sx-text-muted);
+  flex-shrink: 0;
+  /* trailing icons are interactive (eye toggle, clear-X) */
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.sx-input-trailing-icon:hover {
+  color: var(--sx-text-primary);
+}
+
+
+/* ============================================================
+   Textarea
+   ============================================================ */
+
+.sx-textarea {
+  background: var(--sx-bg-elevated);
+  border: 1px solid var(--sx-border-strong);
+  border-radius: 8px;
+  color: var(--sx-text-primary);
+  padding: 10px 14px;
+  font-size: 0.875rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  width: 100%;
+  outline: none;
+  resize: vertical;
+  min-height: 120px;
+  font-family: var(--font-sans);
+  box-sizing: border-box;
+}
+
+.sx-textarea::placeholder {
+  color: var(--sx-text-muted);
+}
+
+.sx-textarea:focus {
+  border-color: var(--sx-accent);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* ============================================================
+   Button
+   ============================================================ */
+
+.sx-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+  outline: none;
+  white-space: nowrap;
+}
+
+.sx-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sx-btn-primary {
+  background: var(--sx-accent);
+  color: white;
+}
+
+.sx-btn-primary:hover:not(:disabled) {
+  background: #2563eb;
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
+  transform: translateY(-1px);
+}
+
+.sx-btn-secondary {
+  background: var(--sx-bg-elevated);
+  color: var(--sx-text-primary);
+  border-color: var(--sx-border-strong);
+}
+
+.sx-btn-secondary:hover:not(:disabled) {
+  background: var(--sx-bg-hover);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.sx-btn-ghost {
+  background: transparent;
+  color: var(--sx-text-secondary);
+}
+
+.sx-btn-ghost:hover:not(:disabled) {
+  background: var(--sx-bg-elevated);
+  color: var(--sx-text-primary);
+}
+
+.sx-btn-danger {
+  background: rgba(248, 113, 113, 0.15);
+  color: var(--sx-hard);
+  border-color: rgba(248, 113, 113, 0.3);
+}
+
+.sx-btn-danger:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.25);
+}
+
+.sx-btn-success {
+  background: rgba(52, 211, 153, 0.15);
+  color: var(--sx-easy);
+  border-color: rgba(52, 211, 153, 0.3);
+}
+
+.sx-btn-success:hover:not(:disabled) {
+  background: rgba(52, 211, 153, 0.25);
+}
+
+.sx-btn-sm {
+  padding: 6px 12px;
+  font-size: 0.75rem;
+}
+
+.sx-btn-lg {
+  padding: 14px 28px;
+  font-size: 1rem;
+}
+
+/* ============================================================
+   Progress bar
+   ============================================================ */
+
+.sx-progress-bar {
+  background: var(--sx-bg-elevated);
+  border-radius: 9999px;
+  overflow: hidden;
+  height: 8px;
+}
+
+.sx-progress-fill {
+  background: linear-gradient(90deg, var(--sx-accent), var(--sx-accent-3));
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 0.6s ease;
+}
+
+/* ============================================================
+   Sidebar
+   ============================================================ */
+
+.sx-sidebar {
+  background: var(--sx-bg-surface);
+  border-right: 1px solid var(--sx-border);
+  width: 240px;
+  min-height: 100vh;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.3s;
+}
+
+.sx-sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--sx-text-secondary);
+  transition: all 0.15s;
+  cursor: pointer;
+  text-decoration: none;
+  border: 1px solid transparent;
+}
+
+.sx-sidebar-link:hover {
+  color: var(--sx-text-primary);
+  background: var(--sx-bg-elevated);
+}
+
+.sx-sidebar-link.active {
+  color: var(--sx-accent);
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(59, 130, 246, 0.15);
+}
+
+/* ============================================================
+   Activity Calendar (Streak)
+   ============================================================ */
+
+.activity-cell {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: var(--sx-bg-elevated);
+  transition: transform 0.15s;
+  cursor: default;
+}
+
+.activity-cell:hover {
+  transform: scale(1.3);
+}
+
+.activity-cell.active-1 { background: rgba(52, 211, 153, 0.25); }
+.activity-cell.active-2 { background: rgba(52, 211, 153, 0.45); }
+.activity-cell.active-3 { background: rgba(52, 211, 153, 0.65); }
+.activity-cell.active-4 { background: rgba(52, 211, 153, 0.85); }
+
+/* ============================================================
+   Animations
+   ============================================================ */
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(59, 130, 246, 0.2); }
+  50% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.4); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease forwards;
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease forwards;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--sx-bg-elevated) 25%,
+    var(--sx-bg-hover) 50%,
+    var(--sx-bg-elevated) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 6px;
+}
+
+/* ============================================================
+   Verification result panels
+   ============================================================ */
+
+.verification-verified {
+  background: linear-gradient(135deg, rgba(52, 211, 153, 0.08), rgba(6, 182, 212, 0.05));
+  border: 1px solid rgba(52, 211, 153, 0.2);
+  border-radius: 16px;
+}
+
+.verification-failed {
+  background: linear-gradient(135deg, rgba(248, 113, 113, 0.08), rgba(239, 68, 68, 0.05));
+  border: 1px solid rgba(248, 113, 113, 0.2);
+  border-radius: 16px;
+}
+
+.verification-pending {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.08), rgba(245, 158, 11, 0.05));
+  border: 1px solid rgba(251, 191, 36, 0.2);
+  border-radius: 16px;
+}
+
+/* ============================================================
+   Responsive layout
+   ============================================================ */
+
+.sx-main-content {
+  margin-left: 240px;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+@media (max-width: 768px) {
+  .sx-sidebar {
+    transform: translateX(-100%);
+  }
+  .sx-sidebar.open {
+    transform: translateX(0);
+  }
+  .sx-main-content {
+    margin-left: 0;
+    padding: 16px;
+  }
+}
+
+/* ============================================================
+   Code editor area
+   ============================================================ */
+
+.code-area {
+  background: #0d1117;
+  border: 1px solid var(--sx-border-strong);
+  border-radius: 10px;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  color: #e6edf3;
+  padding: 16px;
+  resize: vertical;
+  min-height: 200px;
+  width: 100%;
+  outline: none;
+  line-height: 1.7;
+}
+
+.code-area:focus {
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.08);
+}
+
+/* ============================================================
+   Points display
+   ============================================================ */
+
+.points-counter {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* ============================================================
+   Top leaderboard podium
+   ============================================================ */
+
+.rank-gold { color: #fbbf24; }
+.rank-silver { color: #94a3b8; }
+.rank-bronze { color: #b45309; }
