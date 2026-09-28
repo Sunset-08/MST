@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@mstblockchain/mst-sdk": "^1.0.0",
+    "@mstblockchain/mst-vibe-kit": "^0.1.1"
+  }
+}
