@@ -35,25 +35,47 @@ const TABS: Array<{ id: ProfileTab; label: string }> = [
 ];
 
 export default function ProfilePage() {
-  const { participant, stats, isLoading } = useParticipant();
+  const { participant, stats, isLoading, error, refresh } = useParticipant();
   const [activeTab, setActiveTab] = useState<ProfileTab>('overview');
   const [historyFilter, setHistoryFilter] = useState<Difficulty | 'All'>('All');
 
+  // Use mock history/rewards for now; Member 3 will wire real endpoints
   const history = MOCK_CHALLENGE_HISTORY.filter(
     (e) => historyFilter === 'All' || e.difficulty === historyFilter,
   );
 
-  const securityStats = MOCK_STATS.securityStats.map((s) => ({
+  const securityStats = (stats?.securityStats ?? MOCK_STATS.securityStats).map((s) => ({
     category: s.category.split('/')[0].trim(),
     score: s.score,
   }));
 
-  if (isLoading || !participant || !stats) {
+  if (isLoading) {
     return (
       <AppShell>
         <div className="max-w-4xl mx-auto space-y-4">
           <div className="skeleton h-32 w-full rounded-2xl" />
           <div className="skeleton h-64 w-full rounded-2xl" />
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (error || !participant || !stats) {
+    return (
+      <AppShell>
+        <div className="max-w-md mx-auto text-center py-20 space-y-4">
+          <Trophy size={40} className="text-slate-600 mx-auto" />
+          <h2 className="text-lg font-bold text-white">Unable to load profile</h2>
+          <p className="text-slate-500 text-sm">
+            {error ?? 'Profile data could not be loaded.'}
+          </p>
+          <button
+            id="profile-retry-btn"
+            onClick={() => refresh()}
+            className="sx-btn sx-btn-secondary mx-auto"
+          >
+            Retry
+          </button>
         </div>
       </AppShell>
     );

@@ -25,15 +25,20 @@ type ViewMode = 'grid' | 'list';
 export default function ChallengesPage() {
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [filters, setFilters] = useState<FiltersType>(INITIAL_FILTERS);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
 
   // Load challenges on mount and filter changes
   useEffect(() => {
     setIsLoading(true);
+    setLoadError(null);
     getChallenges(filters)
       .then((r) => setChallenges(r.data))
-      .catch(console.error)
+      .catch((err) => {
+        console.error(err);
+        setLoadError(err instanceof Error ? err.message : 'Failed to load challenges');
+      })
       .finally(() => setIsLoading(false));
   }, [filters]);
 
@@ -140,6 +145,19 @@ export default function ChallengesPage() {
                     <div className="skeleton h-4 w-2/3" />
                   </div>
                 ))}
+              </div>
+            ) : loadError ? (
+              <div className="text-center py-20 space-y-4">
+                <Target size={48} className="text-slate-700 mx-auto mb-4" />
+                <p className="text-slate-400 font-medium">Unable to load challenges</p>
+                <p className="text-slate-600 text-sm">{loadError}</p>
+                <button
+                  id="challenges-retry-btn"
+                  onClick={() => setFilters((f) => ({ ...f }))}
+                  className="sx-btn sx-btn-secondary mx-auto"
+                >
+                  Retry
+                </button>
               </div>
             ) : challenges.length === 0 ? (
               <div className="text-center py-20">

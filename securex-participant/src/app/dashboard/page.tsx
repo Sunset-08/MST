@@ -22,7 +22,7 @@ const FEATURED_CHALLENGES = MOCK_CHALLENGES.filter(
 const RECENT_ACTIVITY = MOCK_CHALLENGE_HISTORY.slice(0, 5);
 
 export default function DashboardPage() {
-  const { participant, stats, isLoading } = useParticipant();
+  const { participant, stats, isLoading, error, refresh } = useParticipant();
 
   if (isLoading) {
     return (
@@ -34,7 +34,28 @@ export default function DashboardPage() {
     );
   }
 
-  if (!participant || !stats) return null;
+  if (error || !participant || !stats) {
+    return (
+      <AppShell>
+        <div className="max-w-md mx-auto text-center py-20 space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-rose-400/10 border border-rose-400/20 flex items-center justify-center mx-auto">
+            <Trophy size={28} className="text-rose-400" />
+          </div>
+          <h2 className="text-lg font-bold text-white">Unable to load dashboard</h2>
+          <p className="text-slate-500 text-sm">
+            {error ?? 'Participant data could not be loaded. Please try again.'}
+          </p>
+          <button
+            id="dashboard-retry-btn"
+            onClick={() => refresh()}
+            className="sx-btn sx-btn-secondary mx-auto"
+          >
+            Retry
+          </button>
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>

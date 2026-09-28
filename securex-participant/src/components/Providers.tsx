@@ -10,6 +10,7 @@ import { WagmiProvider, createConfig, http } from 'wagmi';
 import { mainnet } from 'wagmi/chains';
 import { injected } from 'wagmi/connectors';
 import { ParticipantProvider } from '@/lib/context/ParticipantContext';
+import { OrgProvider } from '@/lib/context/OrgContext';
 
 // Wagmi config — BridgeKey is injected EVM wallet (window.ethereum)
 const wagmiConfig = createConfig({
@@ -31,7 +32,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
-        <ParticipantProvider>{children}</ParticipantProvider>
+        <OrgProvider>
+          <ParticipantProvider>{children}</ParticipantProvider>
+        </OrgProvider>
       </QueryClientProvider>
     </WagmiProvider>
   );

@@ -38,7 +38,9 @@ export function ParticipantProvider({ children }: { children: React.ReactNode })
       setParticipant(p);
       setStats(s);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load participant data');
+      const msg = err instanceof Error ? err.message : 'Failed to load participant data';
+      setError(msg);
+      // Keep previous data if any (don't wipe on refresh failure)
     } finally {
       setIsLoading(false);
     }

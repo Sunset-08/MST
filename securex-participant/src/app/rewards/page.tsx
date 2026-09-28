@@ -19,12 +19,16 @@ const FILTER_TABS: RewardFilter[] = ['All', 'Confirmed', 'Pending', 'Processing'
 export default function RewardsPage() {
   const [rewards, setRewards] = useState<Reward[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [filter, setFilter] = useState<RewardFilter>('All');
 
   useEffect(() => {
     getMyRewards()
       .then(setRewards)
-      .catch(console.error)
+      .catch((err) => {
+        console.error(err);
+        setLoadError(err instanceof Error ? err.message : 'Failed to load rewards');
+      })
       .finally(() => setIsLoading(false));
   }, []);
 
@@ -102,6 +106,19 @@ export default function RewardsPage() {
             {Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="skeleton h-48 rounded-xl" />
             ))}
+          </div>
+        ) : loadError ? (
+          <div className="text-center py-16 space-y-3">
+            <AlertCircle size={40} className="text-rose-500 mx-auto" />
+            <p className="text-slate-400 font-medium">Unable to load rewards</p>
+            <p className="text-slate-600 text-sm">{loadError}</p>
+            <button
+              id="rewards-retry-btn"
+              onClick={() => { setLoadError(null); setIsLoading(true); getMyRewards().then(setRewards).catch((e) => setLoadError(e.message)).finally(() => setIsLoading(false)); }}
+              className="sx-btn sx-btn-secondary mx-auto"
+            >
+              Retry
+            </button>
           </div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-16">
