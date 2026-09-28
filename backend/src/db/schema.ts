@@ -28,6 +28,14 @@ export const organizationMemberRoleEnum = pgEnum(
   ],
 );
 
+export const sourceTypeEnum = pgEnum("source_type", [
+  "github",
+  "hackerone",
+  "bugcrowd",
+  "intigriti",
+  "native",
+]);
+
 export const challengeDifficultyEnum = pgEnum("challenge_difficulty", [
   "easy",
   "medium",
@@ -114,9 +122,9 @@ export const users = pgTable("users", {
     .notNull()
     .default("participant"),
 
-  // ----------------------------------------------------------
+  // ==========================================================
   // GAMIFICATION
-  // ----------------------------------------------------------
+  // ==========================================================
 
   points: integer("points")
     .notNull()
@@ -142,9 +150,9 @@ export const users = pgTable("users", {
     withTimezone: true,
   }),
 
-  // ----------------------------------------------------------
+  // ==========================================================
   // TIMESTAMPS
-  // ----------------------------------------------------------
+  // ==========================================================
 
   createdAt: timestamp("created_at", {
     withTimezone: true,
@@ -289,17 +297,140 @@ export const organizationMembers = pgTable(
 );
 
 // ============================================================
+// SECURITY SOURCES
+// ============================================================
+//
+// A source represents where security issues/programs originate.
+//
+// Examples:
+// - GitHub
+// - HackerOne
+// - Bugcrowd
+// - Intigriti
+// - SECUREX native
+//
+// This keeps SECUREX platform-neutral.
+// ============================================================
+
+export const sources = pgTable("sources", {
+  id: uuid("id").defaultRandom().primaryKey(),
+
+  name: text("name")
+    .notNull()
+    .unique(),
+
+  type: sourceTypeEnum("type")
+    .notNull()
+    .unique(),
+
+  baseUrl: text("base_url"),
+
+  isActive: boolean("is_active")
+    .notNull()
+    .default(true),
+
+  createdAt: timestamp("created_at", {
+    withTimezone: true,
+  })
+    .defaultNow()
+    .notNull(),
+
+  updatedAt: timestamp("updated_at", {
+    withTimezone: true,
+  })
+    .defaultNow()
+    .notNull(),
+});
+
+// ============================================================
+// ORGANIZATION SOURCE CONNECTIONS
+// ============================================================
+//
+// Connects a SECUREX organization to an external source.
+//
+// Example:
+//
+// Bitster
+//   ↓
+// GitHub
+//   ↓
+// Bitster GitHub Organization
+//
+// Or eventually:
+//
+// Bitster
+//   ↓
+// HackerOne
+//   ↓
+// Bitster HackerOne Program
+// ============================================================
+
+export const organizationSources = pgTable(
+  "organization_sources",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, {
+        onDelete: "cascade",
+      }),
+
+    sourceId: uuid("source_id")
+      .notNull()
+      .references(() => sources.id, {
+        onDelete: "cascade",
+      }),
+
+    // ID of the organization's entity on the external platform.
+    externalId: text("external_id"),
+
+    // Name used by the external platform.
+    externalName: text("external_name"),
+
+    externalUrl: text("external_url"),
+
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown>>()
+      .default({}),
+
+    isActive: boolean("is_active")
+      .notNull()
+      .default(true),
+
+    createdAt: timestamp("created_at", {
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
+
+    updatedAt: timestamp("updated_at", {
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    unique("organization_source_unique").on(
+      table.organizationId,
+      table.sourceId,
+    ),
+  ],
+);
+
+// ============================================================
 // GITHUB ORGANIZATIONS
 // ============================================================
 //
-// A SECUREX organization/company can connect its GitHub
-// organization through this integration.
+// GitHub-specific integration details.
 //
 // SECUREX Organization
-//          ↓
-// GitHub Organization
-//
-// They are intentionally separate entities.
+//        ↓
+// organization_sources
+//        ↓
+// GitHub
+//        ↓
+// github_organizations
 // ============================================================
 
 export const githubOrganizations = pgTable(
@@ -317,7 +448,8 @@ export const githubOrganizations = pgTable(
       .notNull()
       .unique(),
 
-    name: text("name").notNull(),
+    name: text("name")
+      .notNull(),
 
     login: text("login")
       .notNull()
@@ -359,11 +491,14 @@ export const repositories = pgTable("repositories", {
     .notNull()
     .unique(),
 
-  name: text("name").notNull(),
+  name: text("name")
+    .notNull(),
 
-  fullName: text("full_name").notNull(),
+  fullName: text("full_name")
+    .notNull(),
 
-  url: text("url").notNull(),
+  url: text("url")
+    .notNull(),
 
   defaultBranch: text("default_branch")
     .notNull()
@@ -427,11 +562,13 @@ export const githubIssues = pgTable(
 
     createdAt: timestamp("created_at", {
       withTimezone: true,
-    }).notNull(),
+    })
+      .notNull(),
 
     updatedAt: timestamp("updated_at", {
       withTimezone: true,
-    }).notNull(),
+    })
+      .notNull(),
 
     syncedAt: timestamp("synced_at", {
       withTimezone: true,
@@ -451,12 +588,11 @@ export const githubIssues = pgTable(
 // CHALLENGES
 // ============================================================
 //
-// A GitHub issue is the source.
-// A SECUREX challenge is the gamified version.
+// A source issue is transformed into a SECUREX challenge.
 //
-// GitHub Issue
-//      ↓
-// SECUREX Challenge
+// GitHub Issue / Future External Bounty
+//              ↓
+//       SECUREX Challenge
 // ============================================================
 
 export const challenges = pgTable("challenges", {
@@ -469,9 +605,8 @@ export const challenges = pgTable("challenges", {
     }),
 
   githubIssueId: uuid("github_issue_id")
-    .notNull()
     .references(() => githubIssues.id, {
-      onDelete: "cascade",
+      onDelete: "set null",
     }),
 
   title: text("title")
@@ -492,11 +627,11 @@ export const challenges = pgTable("challenges", {
   verificationType: verificationTypeEnum("verification_type")
     .notNull(),
 
-  // Points awarded to the participant
+  // Gamification reward
   pointsReward: integer("points_reward")
     .notNull(),
 
-  // MST reward configured by the organization
+  // Blockchain reward
   mstReward: integer("mst_reward")
     .notNull(),
 
@@ -636,7 +771,6 @@ export const verifications = pgTable("verifications", {
     .$type<Record<string, unknown>>()
     .default({}),
 
-  // Admin/validator who performed the verification
   verifiedBy: uuid("verified_by")
     .references(() => users.id, {
       onDelete: "set null",
@@ -648,19 +782,16 @@ export const verifications = pgTable("verifications", {
 });
 
 // ============================================================
-// GAMIFICATION EVENTS
+// GAMIFICATION / POINTS / REPUTATION EVENTS
 // ============================================================
 //
-// Every important points/reputation change gets recorded.
+// Every important points/reputation change is recorded here.
 //
 // Example:
 //
 // challenge_completed
 // points = +500
 // reputation = +20
-//
-// This gives us an audit trail instead of blindly modifying
-// numbers with no history.
 // ============================================================
 
 export const reputationEvents = pgTable("reputation_events", {
@@ -814,8 +945,8 @@ export const githubEvents = pgTable("github_events", {
 // BLOCKCHAIN REWARDS
 // ============================================================
 //
-// This table does NOT execute blockchain transactions.
-// It records the state/result of the blockchain payment.
+// This table records blockchain payment state.
+// It does not contain private keys or execute transactions.
 // ============================================================
 
 export const rewards = pgTable("rewards", {
