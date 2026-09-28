@@ -1,21 +1,19 @@
 'use client';
 
 // ============================================================
-// SECUREX — Organization Login Page
-// Member 2 — Organization Side Add-On
-// Route: /org/auth/login
+// SECUREX — Admin Login Page
+// Route: /admin/login
 // ============================================================
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ShieldCheck, Mail, Lock, Eye, EyeOff, ArrowRight, Building2 } from 'lucide-react';
+import { Crown, Mail, Lock, Eye, EyeOff, ArrowRight, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
-import { useOrg } from '@/lib/context/OrgContext';
+import { useAdmin } from '@/lib/context/AdminContext';
 
-export default function OrgLoginPage() {
+export default function AdminLoginPage() {
   const router = useRouter();
-  const { login } = useOrg();
-
+  const { login } = useAdmin();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -28,9 +26,9 @@ export default function OrgLoginPage() {
     setError('');
     try {
       await login(email, password);
-      router.push('/org/dashboard');
+      router.push('/admin/dashboard');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Invalid credentials. Please try again.');
+      setError(err instanceof Error ? err.message : 'Invalid credentials');
     } finally {
       setLoading(false);
     }
@@ -38,44 +36,41 @@ export default function OrgLoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Background glow blobs */}
+      {/* Background */}
       <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-1/4 left-1/3 w-96 h-96 bg-violet-500/8 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/3 right-1/4 w-72 h-72 bg-cyan-500/6 rounded-full blur-3xl" />
-        <div className="absolute top-2/3 left-1/4 w-48 h-48 bg-blue-500/6 rounded-full blur-3xl" />
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-amber-500/6 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/3 right-1/4 w-64 h-64 bg-red-500/4 rounded-full blur-3xl" />
       </div>
 
       <div className="w-full max-w-md relative z-10">
         {/* Branding */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-violet-500/15 border border-violet-500/25 mb-4 glow-violet">
-            <Building2 size={30} className="text-violet-400" />
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-amber-500/15 border border-amber-500/25 mb-4"
+            style={{ boxShadow: '0 0 32px rgba(245,158,11,0.15)' }}>
+            <Crown size={30} className="text-amber-400" />
           </div>
           <h1 className="text-4xl font-black text-white mb-1">
-            SECURE<span className="text-violet-400">X</span>
+            SECURE<span className="text-amber-400">X</span>
           </h1>
-          <p className="text-slate-500 text-sm">Organization / Admin Portal</p>
+          <p className="text-slate-500 text-sm">Platform Administration</p>
         </div>
 
         {/* Card */}
         <div className="sx-card p-8 space-y-6">
           <div>
-            <h2 className="text-xl font-bold text-white">Organization Sign In</h2>
+            <h2 className="text-xl font-bold text-white">Admin Sign In</h2>
             <p className="text-sm text-slate-500 mt-1">
-              Access your organization dashboard to manage security challenges
+              Access the SECUREX platform management console
             </p>
           </div>
 
-          {/* Info banner */}
-          <div className="flex items-start gap-3 bg-violet-400/8 border border-violet-400/20 rounded-lg p-3">
-            <ShieldCheck size={16} className="text-violet-400 mt-0.5 flex-shrink-0" />
-            <p className="text-xs text-violet-300">
-              This portal is for <strong>organizations and administrators</strong> only. 
-              Participants should use the{' '}
-              <Link href="/auth/login" className="underline hover:text-violet-200">
-                participant login
-              </Link>
-              .
+          {/* Access warning */}
+          <div className="flex items-start gap-3 rounded-lg p-3"
+            style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)' }}>
+            <ShieldCheck size={16} className="text-amber-400 mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-amber-300/80">
+              This portal is restricted to <strong>SECUREX platform administrators</strong> only.
+              Unauthorized access attempts are logged.
             </p>
           </div>
 
@@ -87,13 +82,13 @@ export default function OrgLoginPage() {
           )}
 
           {/* Form */}
-          <form onSubmit={handleLogin} className="space-y-4" id="org-login-form">
+          <form onSubmit={handleLogin} className="space-y-4" id="admin-login-form">
             <div className="sx-input-wrapper">
               <Mail size={16} className="sx-input-leading-icon" />
               <input
-                id="org-login-email"
+                id="admin-login-email"
                 type="email"
-                placeholder="Organization email"
+                placeholder="Admin email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="sx-input sx-input-icon-left"
@@ -105,7 +100,7 @@ export default function OrgLoginPage() {
             <div className="sx-input-wrapper">
               <Lock size={16} className="sx-input-leading-icon" />
               <input
-                id="org-login-password"
+                id="admin-login-password"
                 type={showPw ? 'text' : 'password'}
                 placeholder="Password"
                 value={password}
@@ -116,7 +111,7 @@ export default function OrgLoginPage() {
               />
               <button
                 type="button"
-                id="org-toggle-pw"
+                id="admin-toggle-pw"
                 onClick={() => setShowPw(!showPw)}
                 className="sx-input-trailing-icon"
               >
@@ -125,11 +120,11 @@ export default function OrgLoginPage() {
             </div>
 
             <button
-              id="org-login-submit-btn"
+              id="admin-login-submit-btn"
               type="submit"
               disabled={loading}
               className="sx-btn w-full"
-              style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)', color: 'white' }}
+              style={{ background: 'linear-gradient(135deg, #b45309, #d97706)', color: 'white' }}
             >
               {loading ? (
                 <>
@@ -138,7 +133,7 @@ export default function OrgLoginPage() {
                 </>
               ) : (
                 <>
-                  Sign In as Organization
+                  Sign In as Admin
                   <ArrowRight size={16} />
                 </>
               )}
@@ -161,7 +156,7 @@ export default function OrgLoginPage() {
             Demo credentials
           </p>
           <div className="text-xs text-slate-600 space-y-1 text-center">
-            <p>Email: <span className="text-slate-400 font-mono">admin@acmecorp.example.com</span></p>
+            <p>Email: <span className="text-slate-400 font-mono">admin@securex.platform</span></p>
             <p>Password: <span className="text-slate-400 font-mono">any value</span></p>
           </div>
         </div>

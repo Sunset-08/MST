@@ -160,6 +160,13 @@ export default function LoginPage() {
               Create account
             </Link>
           </p>
+
+          {/* Portal back */}
+          <div className="text-center">
+            <Link href="/" className="text-xs text-slate-600 hover:text-slate-400 transition-colors">
+              ← Back to Portal Selection
+            </Link>
+          </div>
         </div>
 
         {/* Points teaser */}
