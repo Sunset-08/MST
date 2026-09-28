@@ -1,0 +1,8 @@
+{
+  "name": "@securex/chain-verifier",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "verifier.js",
+  "description": "SERVER-ONLY. Holds the verifier/reward key. Never bundle into frontend code."
+}
