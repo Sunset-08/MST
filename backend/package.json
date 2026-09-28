@@ -6,8 +6,12 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
-    "test": "tsx --test src/auth.test.ts",
-    "start": "node dist/server.js"
+    "test": "tsx --test \"src/**/*.test.ts\"",
+    "start": "node dist/server.js",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "db:check": "drizzle-kit check",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push"
   },
   "keywords": [],
   "author": "",
@@ -18,11 +22,15 @@
     "cors": "^2.8.6",
     "dotenv": "^18.0.4",
     "drizzle-orm": "^0.45.3",
+    "ethers": "^6.17.0",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.7.0",
+    "octokit": "^5.0.5",
     "pg": "^8.23.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.3",

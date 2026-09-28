@@ -741,7 +741,12 @@ export const submissions = pgTable("submissions", {
   })
     .defaultNow()
     .notNull(),
-});
+},
+  (table) => [
+    // One submission per attempt; retries require a new attempt.
+    unique("submission_attempt_unique").on(table.attemptId),
+  ],
+);
 
 // ============================================================
 // VERIFICATIONS
@@ -779,7 +784,12 @@ export const verifications = pgTable("verifications", {
   verifiedAt: timestamp("verified_at", {
     withTimezone: true,
   }),
-});
+},
+  (table) => [
+    // One verification record per submission.
+    unique("verification_submission_unique").on(table.submissionId),
+  ],
+);
 
 // ============================================================
 // GAMIFICATION / POINTS / REPUTATION EVENTS
@@ -833,7 +843,12 @@ export const reputationEvents = pgTable("reputation_events", {
   })
     .defaultNow()
     .notNull(),
-});
+},
+  (table) => [
+    // Points/reputation for a submission can be recorded only once per event type.
+    unique("reputation_event_submission_type_unique").on(table.submissionId, table.eventType),
+  ],
+);
 
 // ============================================================
 // ACHIEVEMENTS
@@ -1013,4 +1028,9 @@ export const rewards = pgTable("rewards", {
   paidAt: timestamp("paid_at", {
     withTimezone: true,
   }),
-});
+},
+  (table) => [
+    // At most one MST reward per verified submission.
+    unique("reward_submission_unique").on(table.submissionId),
+  ],
+);

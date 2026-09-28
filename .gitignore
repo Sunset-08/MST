@@ -30,3 +30,7 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# Secrets (GitHub App private keys, etc.)
+secrets/
+*.pem
