@@ -2,234 +2,189 @@
 
 // ============================================================
 // SECUREX — Organization Context
-// Member 2 — Organization Side Add-On
-//
-// Manages:
-//   - Authenticated org admin state
-//   - Organization MST payment status (display only — no blockchain)
-//   - Challenge draft lifecycle
-//
-// Does NOT:
-//   - Execute blockchain transactions (Member 4)
-//   - Verify submissions (Member 3)
+// Organization portal state, backed by the SECUREX backend:
+//   - membership and role come from the server (never from browser storage)
+//   - challenge publishing posts to POST /api/org/challenges
+// Funding status is read from GET /api/org/mst-status; this context does not move funds.
 // ============================================================
 
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  useCallback,
-  useRef,
-} from 'react';
-import type {
-  OrgAdmin,
-  Organization,
-  OrgMstStatus,
-  ChallengeDraft,
-} from '@/lib/types/org';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import type { ChallengeDraft, OrgAdmin, Organization, OrgMstStatus } from '@/lib/types/org';
 import { createEmptyDraft } from '@/lib/types/org';
+import { errorMessage, setActiveOrganization } from '@/lib/api/client';
+import { createOrgChallenge, getOrganization, getOrgMstStatus } from '@/lib/api/org';
+import { useAuth } from '@/lib/context/AuthContext';
 
-// ----------------------------------------------------------
-// Mock: platform-configurable minimum MST requirement
-// In production this comes from backend / platform admin config
-// ----------------------------------------------------------
-
-const PLATFORM_MIN_MST_REQUIREMENT = 10; // 10 MSTC minimum
-
-// ----------------------------------------------------------
-// Mock Org Admin (replace with real auth session in prod)
-// ----------------------------------------------------------
-
-const MOCK_ORG: Organization = {
-  id: 'org-demo-001',
-  name: 'AcmeCorp Security',
-  slug: 'acmecorp-security',
-  description: 'Security-first software company specializing in Web3 infrastructure.',
-  website: 'https://acmecorp.example.com',
-  mstStatus: {
-    minimumRequired: PLATFORM_MIN_MST_REQUIREMENT,
-    amountPaid: 0,
-    paymentStatus: 'PAYMENT_REQUIRED',
-    walletAddress: undefined,
-    transactionHash: undefined,
-    lastUpdatedAt: new Date().toISOString(),
-  },
-  createdAt: '2025-06-01T10:00:00Z',
-};
-
-const MOCK_ORG_ADMIN: OrgAdmin = {
-  id: 'admin-001',
-  username: 'orgadmin',
-  displayName: 'Alex (Org Admin)',
-  email: 'admin@acmecorp.example.com',
-  role: 'owner',
-  organization: MOCK_ORG,
-};
-
-// ----------------------------------------------------------
-// Context shape
-// ----------------------------------------------------------
+const ORG_KEY = 'sx_org_id';
 
 interface OrgContextValue {
   admin: OrgAdmin | null;
   organization: Organization | null;
   mstStatus: OrgMstStatus | null;
+  isReady: boolean;
   isLoading: boolean;
   isLoggedIn: boolean;
+  /** Signed in but not a member of any organization yet. */
+  needsOrganization: boolean;
 
-  // Auth
-  login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
-
-  // MST Actions (UI triggers only — actual tx owned by Member 4)
-  initiatePayment: (walletAddress: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<{ hasOrganization: boolean }>;
+  logout: () => Promise<void>;
   refreshMstStatus: () => Promise<void>;
+  refreshOrganization: () => Promise<void>;
 
-  // Challenge Draft
   draft: ChallengeDraft;
   updateDraft: (patch: Partial<ChallengeDraft>) => void;
   resetDraft: () => void;
-  publishChallenge: () => Promise<{ success: boolean; challengeId?: string }>;
+  publishChallenge: (status?: 'published' | 'draft') => Promise<{ success: boolean; challengeId?: string; error?: string }>;
 }
 
 const OrgContext = createContext<OrgContextValue | null>(null);
 
-// ----------------------------------------------------------
-// Provider
-// ----------------------------------------------------------
+const toNumber = (v: number | '') => (v === '' ? undefined : Number(v));
+
+/** Maps the org portal's draft form onto the backend challenge contract. */
+export function draftToPayload(draft: ChallengeDraft, status: 'published' | 'draft') {
+  const questions = draft.questions.map((q) => ({
+    id: q.id,
+    type: q.type,
+    questionText: q.questionText,
+    ...(q.type === 'multiple_choice' ? { options: q.options, correctAnswer: q.correctAnswer } : {}),
+    points: q.points,
+  }));
+  const acceptedAnswers = Object.fromEntries(
+    draft.questions
+      .filter((q) => q.type !== 'multiple_choice' && q.expectedAnswer?.trim())
+      .map((q) => [q.id, [q.expectedAnswer!.trim()]]),
+  );
+  return {
+    title: draft.title.trim(),
+    description: draft.description.trim() || draft.securityIssue.trim(),
+    category: draft.securityCategory,
+    difficulty: draft.difficulty,
+    challengeType: draft.challengeType,
+    verificationType: draft.verificationType,
+    pointsReward: toNumber(draft.pointsReward),
+    mstReward: toNumber(draft.mstReward) ?? 0,
+    maxAttempts: toNumber(draft.maxAttempts) ?? null,
+    githubIssueId: draft.githubIssueId || null,
+    status,
+    challengeConfig: {
+      ...(draft.securityIssue.trim() ? { securityIssue: draft.securityIssue.trim() } : {}),
+      ...(draft.expectedSolutionCriteria.trim() ? { expectedSolutionCriteria: draft.expectedSolutionCriteria.trim() } : {}),
+      ...(draft.expiresAt ? { expiresAt: new Date(draft.expiresAt).toISOString() } : {}),
+      ...(questions.length ? { questions } : {}),
+      ...(Object.keys(acceptedAnswers).length ? { acceptedAnswers } : {}),
+    },
+  };
+}
 
 export function OrgProvider({ children }: { children: React.ReactNode }) {
-  const [admin, setAdmin] = useState<OrgAdmin | null>(null);
+  const auth = useAuth();
+  const [orgId, setOrgId] = useState<string | null>(null);
+  const [organization, setOrganization] = useState<Organization | null>(null);
   const [mstStatus, setMstStatus] = useState<OrgMstStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [draft, setDraft] = useState<ChallengeDraft>(createEmptyDraft());
 
-  // Restore session from localStorage on mount
+  const memberships = auth.me?.organizations ?? [];
+  const membership = memberships.find((m) => m.organizationId === orgId) ?? memberships[0] ?? null;
+
   useEffect(() => {
-    const stored = localStorage.getItem('sx_org_session');
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored) as OrgAdmin;
-        setAdmin(parsed);
-        setMstStatus(parsed.organization.mstStatus);
-      } catch {
-        localStorage.removeItem('sx_org_session');
-      }
-    }
-  }, []);
-
-  // ----------------------------------------------------------
-  // Auth
-  // ----------------------------------------------------------
-
-  const login = useCallback(async (email: string, _password: string) => {
-    setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 900)); // simulate API round-trip
-
-    // TODO: Member 3 — replace with real NextAuth org-credentials provider
-    // For now: any @org email uses mock admin
-    if (!email.includes('@')) {
-      setIsLoading(false);
-      throw new Error('Invalid email');
-    }
-
-    const session = { ...MOCK_ORG_ADMIN, email };
-    setAdmin(session);
-    setMstStatus(session.organization.mstStatus);
-    localStorage.setItem('sx_org_session', JSON.stringify(session));
-    setIsLoading(false);
-  }, []);
-
-  const logout = useCallback(() => {
-    setAdmin(null);
-    setMstStatus(null);
-    localStorage.removeItem('sx_org_session');
-  }, []);
-
-  // ----------------------------------------------------------
-  // MST Status
-  // Member 2 only displays state returned from backend/Member 4.
-  // initiatePayment just sets state to PENDING_PAYMENT so the
-  // UI can show "Awaiting confirmation" — the actual blockchain
-  // transaction is Member 4's responsibility.
-  // ----------------------------------------------------------
-
-  const initiatePayment = useCallback(async (walletAddress: string) => {
-    setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
-
-    setMstStatus((prev) =>
-      prev
-        ? {
-            ...prev,
-            walletAddress,
-            paymentStatus: 'PAYMENT_PROCESSING',
-            lastUpdatedAt: new Date().toISOString(),
-          }
-        : prev,
-    );
-
-    // Simulate backend confirming payment after a delay
-    // In production: Member 4 webhook updates this status
-    setTimeout(() => {
-      setMstStatus((prev) => {
-        if (!prev) return prev;
-        const confirmed: OrgMstStatus = {
-          ...prev,
-          amountPaid: prev.minimumRequired,
-          paymentStatus: 'PAYMENT_CONFIRMED',
-          transactionHash: '0xdemo' + Math.random().toString(16).slice(2, 18),
-          lastUpdatedAt: new Date().toISOString(),
-        };
-        // Persist into local admin copy
-        setAdmin((a) =>
-          a ? { ...a, organization: { ...a.organization, mstStatus: confirmed } } : a,
-        );
-        return confirmed;
-      });
-    }, 3500);
-
-    setIsLoading(false);
-  }, []);
+    const saved = typeof window !== 'undefined' ? window.localStorage.getItem(ORG_KEY) : null;
+    const id = memberships.find((m) => m.organizationId === saved)?.organizationId ?? memberships[0]?.organizationId ?? null;
+    setOrgId(id);
+    setActiveOrganization(id);
+    if (id) window.localStorage.setItem(ORG_KEY, id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth.me?.id, memberships.length]);
 
   const refreshMstStatus = useCallback(async () => {
-    // TODO: Poll backend for updated MST status from Member 4 webhook
-    await new Promise((r) => setTimeout(r, 400));
-  }, []);
+    if (!orgId) return;
+    const s = await getOrgMstStatus();
+    setMstStatus({
+      minimumRequired: s.minimumRequired,
+      amountPaid: s.amountPaid,
+      paymentStatus: s.paymentStatus,
+      lastUpdatedAt: new Date().toISOString(),
+    });
+  }, [orgId]);
 
-  // ----------------------------------------------------------
-  // Challenge Draft
-  // ----------------------------------------------------------
-
-  const updateDraft = useCallback((patch: Partial<ChallengeDraft>) => {
-    setDraft((prev) => ({ ...prev, ...patch }));
-  }, []);
-
-  const resetDraft = useCallback(() => {
-    setDraft(createEmptyDraft());
-  }, []);
-
-  const publishChallenge = useCallback(async (): Promise<{
-    success: boolean;
-    challengeId?: string;
-  }> => {
+  const refreshOrganization = useCallback(async () => {
+    if (!orgId) {
+      setOrganization(null);
+      setMstStatus(null);
+      return;
+    }
     setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 1200));
+    try {
+      const [org, status] = await Promise.all([getOrganization(orgId), getOrgMstStatus()]);
+      const mst: OrgMstStatus = {
+        minimumRequired: status.minimumRequired,
+        amountPaid: status.amountPaid,
+        paymentStatus: status.paymentStatus,
+        lastUpdatedAt: new Date().toISOString(),
+      };
+      setMstStatus(mst);
+      setOrganization({
+        id: org.id, name: org.name, slug: org.slug, description: org.description, logoUrl: org.logoUrl,
+        website: org.website, mstStatus: mst, createdAt: org.createdAt,
+      });
+    } catch {
+      setOrganization(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [orgId]);
 
-    // TODO: Member 3 — POST /api/org/challenges with draft payload
-    const challengeId = 'ch-' + Math.random().toString(36).slice(2, 10);
-    setDraft(createEmptyDraft());
-    setIsLoading(false);
-    return { success: true, challengeId };
-  }, []);
+  useEffect(() => {
+    if (auth.status === 'authenticated' && orgId) void refreshOrganization();
+    else {
+      setOrganization(null);
+      setMstStatus(null);
+    }
+  }, [auth.status, orgId, refreshOrganization]);
 
-  // ----------------------------------------------------------
-  // Derived
-  // ----------------------------------------------------------
+  const login = useCallback(
+    async (email: string, password: string) => {
+      const me = await auth.login(email, password);
+      return { hasOrganization: me.organizations.length > 0 };
+    },
+    [auth],
+  );
 
-  const organization = admin?.organization ?? null;
-  const isLoggedIn = admin !== null;
+  const logout = useCallback(async () => {
+    await auth.logout();
+    setOrganization(null);
+    setMstStatus(null);
+    setActiveOrganization(null);
+  }, [auth]);
+
+  const updateDraft = useCallback((patch: Partial<ChallengeDraft>) => setDraft((prev) => ({ ...prev, ...patch })), []);
+  const resetDraft = useCallback(() => setDraft(createEmptyDraft()), []);
+
+  const publishChallenge = useCallback(
+    async (status: 'published' | 'draft' = 'published') => {
+      setIsLoading(true);
+      try {
+        const created = await createOrgChallenge(draftToPayload(draft, status));
+        setDraft(createEmptyDraft());
+        return { success: true, challengeId: created.id };
+      } catch (err) {
+        return { success: false, error: errorMessage(err, 'Could not save the challenge') };
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [draft],
+  );
+
+  const admin = useMemo<OrgAdmin | null>(
+    () =>
+      auth.me && membership && organization
+        ? { id: auth.me.id, username: auth.me.username, displayName: auth.me.displayName, email: auth.me.email, role: membership.role, organization }
+        : null,
+    [auth.me, membership, organization],
+  );
 
   return (
     <OrgContext.Provider
@@ -237,12 +192,14 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
         admin,
         organization,
         mstStatus,
+        isReady: auth.isReady,
         isLoading,
-        isLoggedIn,
+        isLoggedIn: auth.status === 'authenticated' && memberships.length > 0,
+        needsOrganization: auth.status === 'authenticated' && auth.me !== null && memberships.length === 0,
         login,
         logout,
-        initiatePayment,
         refreshMstStatus,
+        refreshOrganization,
         draft,
         updateDraft,
         resetDraft,

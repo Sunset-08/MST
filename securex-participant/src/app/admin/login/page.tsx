@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 import { Crown, Mail, Lock, Eye, EyeOff, ArrowRight, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useAdmin } from '@/lib/context/AdminContext';
+import { errorMessage } from '@/lib/api/client';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -28,7 +29,7 @@ export default function AdminLoginPage() {
       await login(email, password);
       router.push('/admin/dashboard');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Invalid credentials');
+      setError(errorMessage(err, 'Invalid credentials'));
     } finally {
       setLoading(false);
     }
@@ -150,16 +151,6 @@ export default function AdminLoginPage() {
           </div>
         </div>
 
-        {/* Demo hint */}
-        <div className="mt-5 sx-card p-4">
-          <p className="text-xs text-slate-500 text-center mb-2 font-semibold uppercase tracking-wide">
-            Demo credentials
-          </p>
-          <div className="text-xs text-slate-600 space-y-1 text-center">
-            <p>Email: <span className="text-slate-400 font-mono">admin@securex.platform</span></p>
-            <p>Password: <span className="text-slate-400 font-mono">any value</span></p>
-          </div>
-        </div>
       </div>
     </div>
   );

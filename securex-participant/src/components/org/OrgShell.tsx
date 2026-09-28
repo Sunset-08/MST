@@ -17,6 +17,7 @@ import {
   LogOut,
   ChevronRight,
   Wallet,
+  ClipboardCheck,
   Menu,
   X,
   ShieldCheck,
@@ -28,6 +29,7 @@ const ORG_NAV = [
   { href: '/org/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/org/challenges/create', label: 'Create Challenge', icon: PlusCircle },
   { href: '/org/challenges', label: 'My Challenges', icon: ListChecks },
+  { href: '/org/submissions', label: 'Submissions', icon: ClipboardCheck },
   { href: '/org/settings', label: 'Settings', icon: Settings },
 ];
 
@@ -36,8 +38,8 @@ function OrgSidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => voi
   const { admin, organization, mstStatus, logout } = useOrg();
   const router = useRouter();
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     router.push('/org/auth/login');
   };
 
@@ -195,16 +197,22 @@ function OrgTopBar({ onMenuClick }: { onMenuClick: () => void }) {
 
 export function OrgShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { isLoggedIn } = useOrg();
+  const { isLoggedIn, isReady, needsOrganization, organization } = useOrg();
   const router = useRouter();
 
   useEffect(() => {
-    if (!isLoggedIn) {
-      router.push('/org/auth/login');
-    }
-  }, [isLoggedIn, router]);
+    if (!isReady) return;
+    if (needsOrganization) router.replace('/org/setup');
+    else if (!isLoggedIn) router.replace('/org/auth/login');
+  }, [isReady, isLoggedIn, needsOrganization, router]);
 
-  if (!isLoggedIn) return null;
+  if (!isReady || !isLoggedIn || !organization) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen">

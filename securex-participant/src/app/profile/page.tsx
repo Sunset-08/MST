@@ -5,17 +5,18 @@
 // Points, Reputation, Streak, History, Security Stats
 // ============================================================
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
 import { useParticipant } from '@/lib/context/ParticipantContext';
 import { LevelProgress } from '@/components/participant/gamification/LevelProgress';
 import { ActivityCalendar } from '@/components/participant/streak/ActivityCalendar';
 import { MSTRewardCard } from '@/components/participant/verification/VerificationResult';
 import { WalletButton } from '@/components/participant/wallet/WalletButton';
-import { MOCK_CHALLENGE_HISTORY, MOCK_REWARDS, MOCK_STATS } from '@/lib/api/mock/data';
+import { getMyHistory, getMyRewards } from '@/lib/api/profile';
+import { GitHubConnect } from '@/components/participant/github/GitHubConnect';
 import { formatPoints, DIFFICULTY_BG, DIFFICULTY_COLORS, STATUS_COLORS, CATEGORY_COLORS, cn } from '@/lib/utils';
 import { formatRelativeDate } from '@/lib/utils';
-import type { Difficulty } from '@/lib/types';
+import type { ChallengeHistoryEntry, Difficulty, Reward } from '@/lib/types';
 import {
   Zap, Flame, Trophy, Shield, CheckCircle, Clock,
   BarChart3, GitBranch, Wallet2, Award, Filter
@@ -39,15 +40,25 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<ProfileTab>('overview');
   const [historyFilter, setHistoryFilter] = useState<Difficulty | 'All'>('All');
 
-  // Use mock history/rewards for now; Member 3 will wire real endpoints
-  const history = MOCK_CHALLENGE_HISTORY.filter(
-    (e) => historyFilter === 'All' || e.difficulty === historyFilter,
-  );
+  const [allHistory, setAllHistory] = useState<ChallengeHistoryEntry[]>([]);
+  const [rewards, setRewards] = useState<Reward[]>([]);
 
-  const securityStats = (stats?.securityStats ?? MOCK_STATS.securityStats).map((s) => ({
+  useEffect(() => {
+    getMyHistory().then(setAllHistory).catch(() => setAllHistory([]));
+    getMyRewards().then(setRewards).catch(() => setRewards([]));
+  }, []);
+
+  const history = allHistory.filter((e) => historyFilter === 'All' || e.difficulty === historyFilter);
+
+  const securityStats = (stats?.securityStats ?? []).map((s) => ({
     category: s.category.split('/')[0].trim(),
     score: s.score,
   }));
+
+  // Points per difficulty come from the recorded awards, not from client-side constants.
+  const pointsByDifficulty = allHistory
+    .filter((e) => e.status === 'Verified')
+    .reduce<Record<string, number>>((acc, e) => ({ ...acc, [e.difficulty]: (acc[e.difficulty] ?? 0) + e.pointsAwarded }), {});
 
   if (isLoading) {
     return (
@@ -191,7 +202,7 @@ export default function ProfilePage() {
               <div className="space-y-3">
                 {(['Easy', 'Medium', 'Hard', 'Expert'] as Difficulty[]).map((diff) => {
                   const count = stats.solvedByDifficulty[diff] ?? 0;
-                  const pts = count * (diff === 'Easy' ? 100 : diff === 'Medium' ? 250 : diff === 'Hard' ? 500 : 750);
+                  const pts = pointsByDifficulty[diff] ?? 0;
                   return (
                     <div key={diff} className="flex items-center gap-3">
                       <span className={cn('sx-badge', DIFFICULTY_BG[diff], 'w-16 justify-center')}>
@@ -242,28 +253,28 @@ export default function ProfilePage() {
               </p>
             </div>
 
-            {/* Badges placeholder */}
-            <div className="sx-card p-5">
-              <h3 className="font-bold text-white mb-4 flex items-center gap-2">
-                <Award size={16} className="text-amber-400" />
-                Badges
+            {/* GitHub + wallet */}
+            <div className="sx-card p-5 space-y-4">
+              <h3 className="font-bold text-white flex items-center gap-2">
+                <GitBranch size={16} className="text-slate-300" />
+                Connected accounts
               </h3>
-              <div className="grid grid-cols-4 gap-2">
-                {['🛡', '⚡', '🔥', '🏆', '💎', '🎯', '🔐', '🌐'].map((emoji, i) => (
-                  <div
-                    key={i}
-                    className={cn(
-                      'aspect-square rounded-xl flex items-center justify-center text-2xl',
-                      i < 4
-                        ? 'bg-white/5 border border-white/10'
-                        : 'bg-white/2 border border-white/5 opacity-30',
-                    )}
-                  >
-                    {emoji}
-                  </div>
-                ))}
+              <GitHubConnect />
+              <div>
+                <p className="text-xs text-slate-500 mb-2">Linked wallets</p>
+                {participant.wallets.length === 0 ? (
+                  <p className="text-sm text-slate-500">No wallet linked yet. Use the wallet button in the top bar to connect and link one.</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {participant.wallets.map((wl) => (
+                      <li key={wl.id} className="text-xs font-mono text-slate-300 flex items-center gap-2">
+                        <Wallet2 size={12} className="text-emerald-400" /> {wl.address}
+                        {wl.isPrimary && <span className="sx-badge bg-emerald-400/10 text-emerald-400 border-emerald-400/20 text-[10px]">primary</span>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
-              <p className="text-xs text-slate-600 mt-3">More badges unlocked by solving more challenges</p>
             </div>
           </div>
         )}
@@ -306,6 +317,7 @@ export default function ProfilePage() {
             </div>
 
             <div className="space-y-2">
+              {history.length === 0 && <p className="text-sm text-slate-500 p-3">No challenge activity yet.</p>}
               {history.map((entry) => (
                 <div
                   key={entry.challengeId}
@@ -324,7 +336,9 @@ export default function ProfilePage() {
                     <p className="font-black text-amber-400 text-sm points-counter">
                       +{formatPoints(entry.pointsAwarded)} pts
                     </p>
-                    <p className="text-xs text-emerald-400">✅ Verified</p>
+                    <p className={`text-xs ${entry.status === 'Verified' ? 'text-emerald-400' : entry.status === 'Failed' ? 'text-rose-400' : 'text-slate-400'}`}>
+                      {entry.status === 'Verified' ? '✅ Verified' : entry.status}
+                    </p>
                   </div>
                   {entry.completedAt && (
                     <p className="text-xs text-slate-600 hidden lg:block flex-shrink-0 w-20 text-right">
@@ -340,7 +354,7 @@ export default function ProfilePage() {
         {activeTab === 'rewards' && (
           <div className="animate-fade-in space-y-4">
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {MOCK_REWARDS.map((reward) => (
+              {rewards.map((reward) => (
                 <MSTRewardCard
                   key={reward.id}
                   mstAmount={reward.mstAmount}
@@ -349,7 +363,7 @@ export default function ProfilePage() {
                 />
               ))}
             </div>
-            {MOCK_REWARDS.length === 0 && (
+            {rewards.length === 0 && (
               <div className="text-center py-16 text-slate-500">
                 <Wallet2 size={40} className="mx-auto mb-3 opacity-30" />
                 <p>No rewards yet. Complete a verified challenge to earn MSTC.</p>
@@ -395,7 +409,7 @@ export default function ProfilePage() {
 
               {/* Bar list */}
               <div className="space-y-3">
-                {MOCK_STATS.securityStats.map((stat) => (
+                {(stats?.securityStats ?? []).map((stat) => (
                   <div key={stat.category}>
                     <div className="flex items-center justify-between text-sm mb-1">
                       <span className="text-slate-400 truncate">{stat.category}</span>

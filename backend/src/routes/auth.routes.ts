@@ -2,7 +2,7 @@ import { Router, type RequestHandler } from "express";
 import { z } from "zod";
 import { AuthServiceError, toPublicUser } from "../services/auth.service.js";
 import type { SecurexUser } from "../services/auth.service.js";
-import { logout, login, register } from "../services/auth.service.js";
+import { logout, login, refreshSession, register } from "../services/auth.service.js";
 import { requireAuth } from "../security/auth.js";
 
 const usernameSchema = z.string().trim().min(3).max(24).regex(/^[a-zA-Z0-9_]+$/);
@@ -12,6 +12,7 @@ const registerSchema = z.object({
   username: usernameSchema,
   displayName: z.string().trim().min(1).max(80),
 }).strict();
+const refreshSchema = z.object({ refreshToken: z.string().min(10).max(2048) }).strict();
 const loginSchema = z.object({ email: z.email().max(254), password: z.string().min(1).max(128) }).strict();
 
 export interface AuthRouteDependencies {
@@ -22,6 +23,7 @@ export interface AuthRouteDependencies {
   }>;
   login(input: z.infer<typeof loginSchema>): Promise<{ user: unknown; session: unknown }>;
   logout(token: string): Promise<void>;
+  refresh?(refreshToken: string): Promise<{ user: unknown; session: unknown }>;
   authenticate: RequestHandler;
   publicUser(user: SecurexUser): unknown;
 }
@@ -62,6 +64,15 @@ export function createAuthRouter(dependencies: AuthRouteDependencies): Router {
     } catch (error) { next(error); }
   });
 
+  router.post("/refresh", async (req, res, next) => {
+    const parsed = refreshSchema.safeParse(req.body);
+    if (!parsed.success) return sendValidationError(parsed.error.issues, res);
+    if (!dependencies.refresh) { res.status(404).json({ success: false, error: { code: "NOT_FOUND", message: "Route not found" } }); return; }
+    try {
+      res.json({ success: true, data: await dependencies.refresh(parsed.data.refreshToken) });
+    } catch (error) { next(error); }
+  });
+
   router.post("/logout", dependencies.authenticate, async (req, res, next) => {
     try {
       await dependencies.logout(req.accessToken!);
@@ -80,6 +91,7 @@ export const authRouter = createAuthRouter({
   register,
   login,
   logout,
+  refresh: refreshSession,
   authenticate: requireAuth,
   publicUser: toPublicUser,
 });

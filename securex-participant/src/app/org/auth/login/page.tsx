@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation';
 import { ShieldCheck, Mail, Lock, Eye, EyeOff, ArrowRight, Building2 } from 'lucide-react';
 import Link from 'next/link';
 import { useOrg } from '@/lib/context/OrgContext';
+import { errorMessage } from '@/lib/api/client';
 
 export default function OrgLoginPage() {
   const router = useRouter();
@@ -27,10 +28,10 @@ export default function OrgLoginPage() {
     setLoading(true);
     setError('');
     try {
-      await login(email, password);
-      router.push('/org/dashboard');
+      const { hasOrganization } = await login(email.trim(), password);
+      router.push(hasOrganization ? '/org/dashboard' : '/org/setup');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Invalid credentials. Please try again.');
+      setError(errorMessage(err, 'Invalid credentials. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -145,6 +146,13 @@ export default function OrgLoginPage() {
             </button>
           </form>
 
+          <p className="text-center text-sm text-slate-500">
+            New organization?{' '}
+            <Link href="/org/auth/signup" className="text-violet-400 hover:text-violet-300 font-medium">
+              Create an account
+            </Link>
+          </p>
+
           <div className="text-center">
             <Link
               href="/"
@@ -155,16 +163,6 @@ export default function OrgLoginPage() {
           </div>
         </div>
 
-        {/* Demo hint */}
-        <div className="mt-5 sx-card p-4">
-          <p className="text-xs text-slate-500 text-center mb-2 font-semibold uppercase tracking-wide">
-            Demo credentials
-          </p>
-          <div className="text-xs text-slate-600 space-y-1 text-center">
-            <p>Email: <span className="text-slate-400 font-mono">admin@acmecorp.example.com</span></p>
-            <p>Password: <span className="text-slate-400 font-mono">any value</span></p>
-          </div>
-        </div>
       </div>
     </div>
   );

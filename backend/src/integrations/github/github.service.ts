@@ -2,7 +2,7 @@ import { and, count, desc, eq, ilike, inArray, max, notInArray, or, sql, type SQ
 import { ref } from "../../utils/sql.js";
 import { z } from "zod";
 import type { DbOrTx } from "../../db/index.js";
-import { challenges, githubEvents, githubIssues, githubOrganizations, organizationSources, repositories, sources } from "../../db/schema.js";
+import { challenges, githubEvents, githubIssues, githubOrganizations, organizations, organizationSources, repositories, sources } from "../../db/schema.js";
 import type { ServiceDeps } from "../../services/deps.js";
 import { signPayload, verifySignedPayload } from "../../utils/crypto.js";
 import { iso } from "../../utils/dates.js";
@@ -219,8 +219,12 @@ export class GitHubService {
   async adminOverview() {
     const orgs = await this.deps.db.select({
       g: githubOrganizations,
+      orgName: organizations.name,
       repos: sql<number>`(SELECT count(*)::int FROM ${repositories} r WHERE r.github_organization_id = ${ref(githubOrganizations.id)})`,
-    }).from(githubOrganizations).orderBy(desc(githubOrganizations.createdAt)).limit(100);
+      lastSync: sql<Date | null>`(SELECT max(i.synced_at) FROM ${githubIssues} i JOIN ${repositories} r ON r.id = i.repository_id WHERE r.github_organization_id = ${ref(githubOrganizations.id)})`,
+    }).from(githubOrganizations)
+      .innerJoin(organizations, eq(organizations.id, githubOrganizations.organizationId))
+      .orderBy(desc(githubOrganizations.createdAt)).limit(100);
     const [events] = await this.deps.db.select({
       total: count(), unprocessed: sql<number>`count(*) FILTER (WHERE ${githubEvents.processedAt} IS NULL)::int`,
     }).from(githubEvents);
@@ -230,8 +234,11 @@ export class GitHubService {
     return {
       appConfigured: this.deps.github.isConfigured(),
       webhookSecretConfigured: Boolean(this.deps.config.github.webhookSecret),
-      installations: orgs.map(({ g, repos }) => ({ id: g.id, organizationId: g.organizationId, login: g.login, name: g.name,
-        installationId: g.installationId, repositories: Number(repos), linkedAt: iso(g.createdAt) })),
+      installations: orgs.map(({ g, repos, orgName, lastSync }) => ({ id: g.id, organizationId: g.organizationId, login: g.login, name: g.name,
+        installationId: g.installationId, repositories: Number(repos), linkedAt: iso(g.createdAt),
+        orgName, githubOrg: g.login, installationStatus: "connected", repositoryCount: Number(repos),
+        lastSyncAt: lastSync ? iso(new Date(lastSync)) : null,
+        webhookStatus: this.deps.config.github.webhookSecret ? (Number(events?.total ?? 0) > 0 ? "active" : "inactive") : "inactive" })),
       events: { total: Number(events?.total ?? 0), unprocessed: Number(events?.unprocessed ?? 0) },
       recentEvents: recent.map((e) => ({ ...e, receivedAt: iso(e.receivedAt), processedAt: iso(e.processedAt) })),
     };

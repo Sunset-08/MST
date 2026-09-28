@@ -2,29 +2,78 @@
 
 // ============================================================
 // SECUREX — Onboarding Page (post-signup wizard)
+// Profile → GitHub (required) → Wallet (link with a signature) → done
 // ============================================================
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ShieldCheck, User, Wallet, GitBranch, CheckCircle, ArrowRight, Zap } from 'lucide-react';
 import { useConnect } from 'wagmi';
 import { injected } from 'wagmi/connectors';
+import { GitHubConnect } from '@/components/participant/github/GitHubConnect';
+import { updateProfile } from '@/lib/api/profile';
+import { errorMessage } from '@/lib/api/client';
+import { useAuth } from '@/lib/context/AuthContext';
+import { useWalletLink } from '@/lib/chain/useWalletLink';
+import { truncateAddress } from '@/lib/utils';
 
 const STEPS = ['profile', 'github', 'wallet', 'done'] as const;
 type Step = (typeof STEPS)[number];
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const { me, status, isReady, reload } = useAuth();
   const [step, setStep] = useState<Step>('profile');
   const [profile, setProfile] = useState({ displayName: '', bio: '' });
-  const { connect, isPending } = useConnect();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const { connect, isPending, error: connectError } = useConnect();
+  const w = useWalletLink();
+
+  useEffect(() => {
+    if (isReady && status === 'anonymous') router.replace('/auth/login');
+  }, [isReady, status, router]);
+
+  useEffect(() => {
+    if (me) setProfile((p) => ({ displayName: p.displayName || me.displayName || '', bio: p.bio || me.bio || '' }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me?.id]);
 
   const stepIndex = STEPS.indexOf(step);
+  const githubRequired = me?.requirements.githubConnection ?? true;
+  const githubConnected = Boolean(me?.github.connected);
 
   function next() {
     const nextStep = STEPS[stepIndex + 1];
     if (nextStep) setStep(nextStep);
     else router.push('/dashboard');
+  }
+
+  async function saveProfile() {
+    setSaving(true);
+    setError('');
+    try {
+      const patch: { displayName?: string; bio?: string | null } = {};
+      if (profile.displayName.trim() && profile.displayName.trim() !== me?.displayName) patch.displayName = profile.displayName.trim();
+      if ((profile.bio.trim() || null) !== (me?.bio ?? null)) patch.bio = profile.bio.trim() || null;
+      if (Object.keys(patch).length) {
+        await updateProfile(patch);
+        await reload();
+      }
+      next();
+    } catch (err) {
+      setError(errorMessage(err, 'Could not save your profile'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!isReady || !me) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
   }
 
   return (
@@ -49,22 +98,15 @@ export default function OnboardingPage() {
           {STEPS.slice(0, -1).map((s, i) => (
             <div key={s} className="flex items-center gap-3">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
-                i < stepIndex
-                  ? 'bg-emerald-400 text-white'
-                  : i === stepIndex
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-white/10 text-slate-500'
+                i < stepIndex ? 'bg-emerald-400 text-white' : i === stepIndex ? 'bg-blue-500 text-white' : 'bg-white/10 text-slate-500'
               }`}>
                 {i < stepIndex ? <CheckCircle size={16} /> : i + 1}
               </div>
-              {i < STEPS.length - 2 && (
-                <div className={`w-8 h-px ${i < stepIndex ? 'bg-emerald-400' : 'bg-white/10'}`} />
-              )}
+              {i < STEPS.length - 2 && <div className={`w-8 h-px ${i < stepIndex ? 'bg-emerald-400' : 'bg-white/10'}`} />}
             </div>
           ))}
         </div>
 
-        {/* Steps */}
         <div className="sx-card p-8">
           {/* Step 1: Profile */}
           {step === 'profile' && (
@@ -87,6 +129,7 @@ export default function OnboardingPage() {
                     type="text"
                     placeholder="e.g. Alex or @alexsec"
                     value={profile.displayName}
+                    maxLength={80}
                     onChange={(e) => setProfile((p) => ({ ...p, displayName: e.target.value }))}
                     className="sx-input"
                   />
@@ -97,15 +140,16 @@ export default function OnboardingPage() {
                     id="onboard-bio"
                     placeholder="Security researcher, web3 enthusiast..."
                     value={profile.bio}
+                    maxLength={500}
                     onChange={(e) => setProfile((p) => ({ ...p, bio: e.target.value }))}
                     className="sx-textarea"
                     rows={3}
                   />
                 </div>
               </div>
-
-              <button id="onboard-profile-next" onClick={next} className="sx-btn sx-btn-primary w-full">
-                Continue <ArrowRight size={16} />
+              {error && <p className="text-sm text-rose-400">{error}</p>}
+              <button id="onboard-profile-next" onClick={saveProfile} disabled={saving} className="sx-btn sx-btn-primary w-full">
+                {saving ? 'Saving…' : <>Continue <ArrowRight size={16} /></>}
               </button>
             </div>
           )}
@@ -118,38 +162,40 @@ export default function OnboardingPage() {
                   <GitBranch size={20} className="text-white" />
                 </div>
                 <div>
-                  <h2 className="font-bold text-white">Connect GitHub</h2>
-                  <p className="text-xs text-slate-500">Helps verify your contributions to challenge repos</p>
+                  <h2 className="font-bold text-white">Connect GitHub {githubRequired && <span className="text-rose-400">*</span>}</h2>
+                  <p className="text-xs text-slate-500">Required to start challenges and verify your contributions</p>
                 </div>
               </div>
 
               <div className="bg-white/3 border border-white/8 rounded-xl p-4 space-y-3">
-                <div className="flex items-start gap-3">
-                  <CheckCircle size={16} className="text-emerald-400 mt-0.5 flex-shrink-0" />
-                  <p className="text-sm text-slate-400">Verify solutions through GitHub PRs and commits</p>
-                </div>
-                <div className="flex items-start gap-3">
-                  <CheckCircle size={16} className="text-emerald-400 mt-0.5 flex-shrink-0" />
-                  <p className="text-sm text-slate-400">Get credit for open source security contributions</p>
-                </div>
-                <div className="flex items-start gap-3">
-                  <CheckCircle size={16} className="text-emerald-400 mt-0.5 flex-shrink-0" />
-                  <p className="text-sm text-slate-400">Earn Points only after backend verification</p>
-                </div>
+                {[
+                  'Verify solutions through GitHub PRs and commits',
+                  'Get credit for open source security contributions',
+                  'Earn Points only after backend verification',
+                ].map((t) => (
+                  <div key={t} className="flex items-start gap-3">
+                    <CheckCircle size={16} className="text-emerald-400 mt-0.5 flex-shrink-0" />
+                    <p className="text-sm text-slate-400">{t}</p>
+                  </div>
+                ))}
               </div>
+
+              <GitHubConnect />
 
               <div className="space-y-3">
                 <button
-                  id="onboard-github-connect"
+                  id="onboard-github-next"
                   onClick={next}
-                  className="sx-btn sx-btn-secondary w-full gap-3"
+                  disabled={githubRequired && !githubConnected}
+                  className="sx-btn sx-btn-primary w-full"
                 >
-                  <GitBranch size={18} />
-                  Connect GitHub Account
+                  Continue <ArrowRight size={16} />
                 </button>
-                <button id="onboard-github-skip" onClick={next} className="sx-btn sx-btn-ghost w-full text-slate-500">
-                  Skip for now
-                </button>
+                {!githubRequired && !githubConnected && (
+                  <button id="onboard-github-skip" onClick={next} className="sx-btn sx-btn-ghost w-full text-slate-500">
+                    Skip for now
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -162,8 +208,8 @@ export default function OnboardingPage() {
                   <Wallet size={20} className="text-emerald-400" />
                 </div>
                 <div>
-                  <h2 className="font-bold text-white">Connect BridgeKey Wallet</h2>
-                  <p className="text-xs text-slate-500">Receive MSTC rewards on the MST Blockchain</p>
+                  <h2 className="font-bold text-white">Connect your Wallet</h2>
+                  <p className="text-xs text-slate-500">Receive MST rewards on the MST Blockchain</p>
                 </div>
               </div>
 
@@ -173,30 +219,51 @@ export default function OnboardingPage() {
                   <p className="text-sm font-semibold text-white">How rewards work</p>
                 </div>
                 <p className="text-xs text-slate-400">
-                  After a submission is <span className="text-emerald-400 font-semibold">VERIFIED</span> by the backend engine, 
-                  you receive both Points (for the leaderboard) and MSTC tokens (on-chain reward) deposited to your wallet.
+                  After a submission is <span className="text-emerald-400 font-semibold">VERIFIED</span> by the backend you receive Points
+                  (for the leaderboard) and an MST reward for your linked wallet. Linking asks you to sign a message; it costs no gas and
+                  sends no transaction.
                 </p>
               </div>
 
               <div className="space-y-3">
-                <button
-                  id="onboard-wallet-connect"
-                  disabled={isPending}
-                  onClick={() => {
-                    connect({ connector: injected() });
-                    setTimeout(next, 1000);
-                  }}
-                  className="sx-btn sx-btn-primary w-full gap-3"
-                >
-                  {isPending ? (
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <Wallet size={18} />
-                  )}
-                  Connect BridgeKey Wallet
-                </button>
-                <button id="onboard-wallet-skip" onClick={next} className="sx-btn sx-btn-ghost w-full text-slate-500">
-                  Skip — I&apos;ll connect later
+                {!w.isConnected ? (
+                  <button
+                    id="onboard-wallet-connect"
+                    disabled={isPending}
+                    onClick={() => connect({ connector: injected() })}
+                    className="sx-btn sx-btn-primary w-full gap-3"
+                  >
+                    {isPending ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Wallet size={18} />}
+                    Connect Wallet
+                  </button>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-xs text-slate-400 text-center">
+                      Connected: <span className="font-mono text-slate-200">{w.address && truncateAddress(w.address)}</span>
+                    </p>
+                    {w.wrongNetwork && (
+                      <button id="onboard-wallet-switch" onClick={w.switchNetwork} disabled={w.busy !== 'idle'} className="sx-btn sx-btn-secondary w-full">
+                        {w.busy === 'switching' ? 'Switching…' : 'Switch to MST Testnet'}
+                      </button>
+                    )}
+                    {w.isLinked ? (
+                      <p className="text-sm text-emerald-400 text-center flex items-center justify-center gap-2">
+                        <CheckCircle size={16} /> Wallet linked to your account
+                      </p>
+                    ) : (
+                      <button id="onboard-wallet-link" onClick={() => w.link().catch(() => undefined)} disabled={w.busy !== 'idle'} className="sx-btn sx-btn-primary w-full">
+                        {w.busy === 'signing' ? 'Waiting for signature…' : 'Link wallet (sign message)'}
+                      </button>
+                    )}
+                  </div>
+                )}
+                {(w.error || connectError) && (
+                  <p className="text-sm text-rose-400">
+                    {w.error ?? (/connector not found|provider/i.test(connectError?.message ?? '') ? 'No wallet found. Install a browser wallet (e.g. BridgeKey or MetaMask) and reload.' : connectError?.message)}
+                  </p>
+                )}
+                <button id="onboard-wallet-next" onClick={next} className={`sx-btn w-full ${w.isLinked ? 'sx-btn-primary' : 'sx-btn-ghost text-slate-500'}`}>
+                  {w.isLinked ? <>Continue <ArrowRight size={16} /></> : "Skip — I'll link it later (MST rewards wait for a linked wallet)"}
                 </button>
               </div>
             </div>
@@ -212,23 +279,9 @@ export default function OnboardingPage() {
               </div>
               <div>
                 <h2 className="text-2xl font-black text-white mb-2">You&apos;re all set! 🚀</h2>
-                <p className="text-slate-400 text-sm">
-                  Start solving security challenges and earn Points after each verified submission.
-                </p>
+                <p className="text-slate-400 text-sm">Start solving security challenges and earn Points after each verified submission.</p>
               </div>
-              <div className="grid grid-cols-3 gap-3 text-center">
-                {[['Easy', '100'], ['Medium', '250'], ['Hard', '500']].map(([d, p]) => (
-                  <div key={d} className="bg-white/3 rounded-xl p-3 border border-white/5">
-                    <p className="text-lg font-black text-amber-400">+{p}</p>
-                    <p className="text-xs text-slate-500">{d} pts</p>
-                  </div>
-                ))}
-              </div>
-              <button
-                id="onboard-go-dashboard"
-                onClick={() => router.push('/dashboard')}
-                className="sx-btn sx-btn-primary w-full sx-btn-lg"
-              >
+              <button id="onboard-go-dashboard" onClick={() => router.push('/dashboard')} className="sx-btn sx-btn-primary w-full sx-btn-lg">
                 Go to Dashboard <ArrowRight size={18} />
               </button>
             </div>

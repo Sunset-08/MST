@@ -14,10 +14,13 @@ import type { PublishValidationResult } from '@/lib/types/org';
 interface PublishGateProps {
   validation: PublishValidationResult;
   onPublish: () => void;
+  onSaveDraft?: () => void;
+  canSaveDraft?: boolean;
+  error?: string;
   isPublishing: boolean;
 }
 
-export function PublishGate({ validation, onPublish, isPublishing }: PublishGateProps) {
+export function PublishGate({ validation, onPublish, onSaveDraft, canSaveDraft, error, isPublishing }: PublishGateProps) {
   const { isValid, isMstSatisfied, missingFields } = validation;
 
   return (
@@ -127,6 +130,24 @@ export function PublishGate({ validation, onPublish, isPublishing }: PublishGate
           </>
         )}
       </button>
+
+      {onSaveDraft && (
+        <button
+          id="org-save-draft-btn"
+          type="button"
+          disabled={!canSaveDraft || isPublishing}
+          onClick={onSaveDraft}
+          className="sx-btn sx-btn-secondary w-full"
+        >
+          Save as draft
+        </button>
+      )}
+
+      {error && (
+        <div className="rounded-lg p-3 text-xs text-rose-300" style={{ background: 'rgba(248, 113, 113, 0.08)', border: '1px solid rgba(248, 113, 113, 0.2)' }}>
+          {error}
+        </div>
+      )}
     </div>
   );
 }

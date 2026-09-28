@@ -9,9 +9,11 @@ import { createApp } from "../app.js";
 import { loadConfig, type AppConfig } from "../config/env.js";
 import type { Db } from "../db/index.js";
 import * as schema from "../db/schema.js";
+import { ClaimError, type ClaimInput, type ClaimPreparation, type ClaimResult, type RewardClaimProvider } from "../integrations/blockchain/claims.js";
 import type { BlockchainRewardProvider, ProviderStatus, RewardInput, TransactionStatus } from "../integrations/blockchain/types.js";
 import { BlockchainNotConfiguredError } from "../integrations/blockchain/types.js";
 import type { GitHubAppClient, GitHubInstallation, GitHubIssueData, GitHubRepositoryData } from "../integrations/github/types.js";
+import type { DeviceFlowPoll, DeviceFlowStart, GitHubUserAuth, GitHubUserProfile } from "../integrations/github/user-auth.js";
 import { createAuthMiddleware } from "../security/auth.js";
 import { AuthServiceError } from "../services/auth.service.js";
 
@@ -45,6 +47,56 @@ export class FakeGitHub implements GitHubAppClient {
   async listRepositoryIssues(_id: string, owner: string, repo: string) { this.calls.push(`issues:${owner}/${repo}`); return this.issues.get(`${owner}/${repo}`) ?? []; }
 }
 
+export class FakeGitHubUser implements GitHubUserAuth {
+  configured = true;
+  /** device_code -> outcome */
+  outcomes = new Map<string, DeviceFlowPoll>();
+  profiles = new Map<string, GitHubUserProfile>();
+  n = 0;
+  isConfigured() { return this.configured; }
+  async start(): Promise<DeviceFlowStart> {
+    this.n++;
+    return { deviceCode: `device-${this.n}`, userCode: `ABCD-${1000 + this.n}`, verificationUri: "https://github.com/login/device", expiresIn: 900, interval: 5 };
+  }
+  async poll(deviceCode: string): Promise<DeviceFlowPoll> { return this.outcomes.get(deviceCode) ?? { status: "pending" }; }
+  async getUser(token: string): Promise<GitHubUserProfile> {
+    const p = this.profiles.get(token);
+    if (!p) throw new Error("unknown token");
+    return p;
+  }
+}
+
+/** In-memory stand-in for the on-chain claim flow (the real one is exercised against a local EVM in rehearsals). */
+export class FakeClaims implements RewardClaimProvider {
+  configured = false;
+  failWith: ClaimError | null = null;
+  prepared: ClaimInput[] = [];
+  completed: (ClaimInput & { txHash: string })[] = [];
+  status() {
+    return this.configured
+      ? { configured: true, canSend: true, canReadTransactions: true, claimsConfigured: true }
+      : { configured: false, canSend: false, canReadTransactions: false, claimsConfigured: false, reason: "blockchain not configured" };
+  }
+  async prepare(input: ClaimInput): Promise<ClaimPreparation> {
+    if (!this.configured) throw new ClaimError("BLOCKCHAIN_NOT_CONFIGURED", "blockchain not configured", 503);
+    if (this.failWith) throw this.failWith;
+    this.prepared.push(input);
+    return {
+      chainId: 91562037, submissionRegistryAddress: "0x0000000000000000000000000000000000000001",
+      challengeId: `0x${"11".repeat(32)}`, solutionCommitment: `0x${"22".repeat(32)}`, abi: [], functionName: "submitProof", amountWei: String(input.amount * 1e15),
+    };
+  }
+  async complete(input: ClaimInput & { txHash: string }): Promise<ClaimResult> {
+    if (!this.configured) throw new ClaimError("BLOCKCHAIN_NOT_CONFIGURED", "blockchain not configured", 503);
+    if (this.failWith) throw this.failWith;
+    this.completed.push(input);
+    return {
+      onchainSubmissionId: `0x${"33".repeat(32)}`, verificationTx: `0x${"44".repeat(32)}`, rewardTx: `0x${"55".repeat(32)}`, rewardBlock: 7,
+      contractAddress: "0x0000000000000000000000000000000000000002", amountWei: String(input.amount * 1e15), recipient: input.recipientAddress,
+    };
+  }
+}
+
 export class FakeChain implements BlockchainRewardProvider {
   canSend = false;
   sent: RewardInput[] = [];
@@ -66,27 +118,31 @@ export interface TestContext {
   baseUrl: string;
   db: Db;
   github: FakeGitHub;
+  githubUser: FakeGitHubUser;
+  claims: FakeClaims;
   chain: FakeChain;
   clock: { now: Date };
   config: AppConfig;
   services: ReturnType<typeof createApp>["services"];
   close(): Promise<void>;
   /** Creates a SECUREX user and returns a bearer token for it. */
-  user(username: string, role?: "participant" | "platform_admin"): Promise<{ id: string; token: string; username: string }>;
+  user(username: string, role?: "participant" | "platform_admin", opts?: { github?: boolean }): Promise<{ id: string; token: string; username: string }>;
   api(method: string, path: string, opts?: { token?: string; body?: unknown; headers?: Record<string, string>; raw?: string }): Promise<{ status: number; body: any; headers: Headers }>;
 }
 
 export async function startTestApp(overrides: Partial<AppConfig> = {}): Promise<TestContext> {
   const { db, client } = await createTestDb();
   const github = new FakeGitHub();
+  const githubUser = new FakeGitHubUser();
   const chain = new FakeChain();
+  const claims = new FakeClaims();
   const clock = { now: new Date("2026-09-01T12:00:00.000Z") };
   const config: AppConfig = {
     ...loadConfig({ NODE_ENV: "test" }),
     signingSecret: "test-signing-secret-0123456789abcdef",
     ...overrides,
     github: { ...loadConfig({}).github, appId: "5112750", privateKeyPath: "/nonexistent", webhookSecret: "whsec-test", ...overrides.github },
-    mst: { network: "mst-testnet", ...overrides.mst },
+    mst: { ...loadConfig({}).mst, network: "mst-testnet", ...overrides.mst },
   };
   const tokens = new Map<string, string>(); // token -> authUserId
   const authenticate = createAuthMiddleware({
@@ -101,7 +157,7 @@ export async function startTestApp(overrides: Partial<AppConfig> = {}): Promise<
     },
   });
   const { app, services } = createApp({
-    db, config, github, blockchain: chain, authenticate,
+    db, config, github, githubUser, blockchain: chain, claims, authenticate,
     auth: {
       register: async (input) => ({ user: { username: input.username }, session: null, emailConfirmationRequired: true }),
       login: async (input) => {
@@ -109,6 +165,10 @@ export async function startTestApp(overrides: Partial<AppConfig> = {}): Promise<
         return { user: { email: input.email }, session: { accessToken: "issued" } };
       },
       logout: async () => undefined,
+      refresh: async (token) => {
+        if (token !== "valid-refresh-token") throw new AuthServiceError("AUTH_REFRESH_FAILED", "Session expired; sign in again", 401);
+        return { user: { email: "r@example.test" }, session: { accessToken: "new-access", refreshToken: "next-refresh" } };
+      },
       publicUser: (u) => ({ id: u.id, username: u.username, role: u.role }),
     },
     now: () => clock.now,
@@ -122,15 +182,18 @@ export async function startTestApp(overrides: Partial<AppConfig> = {}): Promise<
   const baseUrl = `http://127.0.0.1:${address.port}`;
   let n = 0;
   return {
-    baseUrl, db, github, chain, clock, config, services,
+    baseUrl, db, github, githubUser, claims, chain, clock, config, services,
     async close() {
       await new Promise<void>((r, j) => server.close((e) => (e ? j(e) : r())));
       await client.close();
     },
-    async user(username, role = "participant") {
+    async user(username, role = "participant", opts = {}) {
       n++;
       const authUserId = `auth-${username}-${n}`;
-      const [u] = await db.insert(schema.users).values({ authUserId, username, displayName: username, email: `${username}@example.test`, role }).returning();
+      const [u] = await db.insert(schema.users).values({
+        authUserId, username, displayName: username, email: `${username}@example.test`, role,
+        githubUsername: opts.github === false ? null : `gh-${username}`,
+      }).returning();
       const token = `token-${username}-${n}`;
       tokens.set(token, authUserId);
       return { id: u!.id, token, username };

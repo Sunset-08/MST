@@ -129,6 +129,30 @@ describe("submissions", () => {
     assert.equal(listed.body.data.solved, 1);
   });
 
+  test("free-text answers match when they contain the accepted phrase as whole words; multiple choice stays exact", async () => {
+    const u = await ctx.user("phrase");
+    const start = await ctx.api("POST", `/api/challenges/${seeded.challengeId}/start`, { token: u.token });
+    const sub = await ctx.api("POST", `/api/attempts/${start.body.data.id}/submit`, {
+      token: u.token, body: { structuredAnswers: { q1: "B", q2: "We should Require a Second Verifier, ideally 2-of-3." } },
+    });
+    assert.equal((await waitForResult(ctx, u.token, sub.body.data.submissionId)).body.data.status, "Verified");
+
+    const v = await ctx.user("phrasefail");
+    const s2 = await ctx.api("POST", `/api/challenges/${seeded.challengeId}/start`, { token: v.token });
+    const sub2 = await ctx.api("POST", `/api/attempts/${s2.body.data.id}/submit`, {
+      token: v.token, body: { structuredAnswers: { q1: "B", q2: "second verifiers are overrated" } },
+    });
+    const r2 = await waitForResult(ctx, v.token, sub2.body.data.submissionId);
+    assert.equal(r2.body.data.status, "Failed", "'verifiers' is not the whole word 'verifier'");
+
+    const w = await ctx.user("mcexact");
+    const s3 = await ctx.api("POST", `/api/challenges/${seeded.challengeId}/start`, { token: w.token });
+    const sub3 = await ctx.api("POST", `/api/attempts/${s3.body.data.id}/submit`, {
+      token: w.token, body: { structuredAnswers: { q1: "rpc-2", q2: "second verifier" } },
+    });
+    assert.equal((await waitForResult(ctx, w.token, sub3.body.data.submissionId)).body.data.status, "Failed", "multiple choice needs the option id");
+  });
+
   test("wrong answers fail with a reason and award nothing", async () => {
     const u = await ctx.user("guesser");
     const start = await ctx.api("POST", `/api/challenges/${seeded.challengeId}/start`, { token: u.token });

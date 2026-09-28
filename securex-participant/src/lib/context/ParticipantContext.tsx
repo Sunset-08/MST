@@ -2,16 +2,18 @@
 
 // ============================================================
 // SECUREX — Participant Context
-// Server state: participant, stats, streak — sourced from backend
+// Server state: participant, stats, streak — sourced from the backend
 // Points are the single scoring metric (NO XP)
 // ============================================================
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import type { Participant, ParticipantStats } from '@/lib/types';
-import { getMe, getMyStats } from '@/lib/api/profile';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import type { Me, ParticipantStats } from '@/lib/types';
+import { getMyStats } from '@/lib/api/profile';
+import { errorMessage } from '@/lib/api/client';
+import { useAuth } from '@/lib/context/AuthContext';
 
 interface ParticipantContextValue {
-  participant: Participant | null;
+  participant: Me | null;
   stats: ParticipantStats | null;
   isLoading: boolean;
   error: string | null;
@@ -25,42 +27,43 @@ interface ParticipantContextValue {
 const ParticipantContext = createContext<ParticipantContextValue | null>(null);
 
 export function ParticipantProvider({ children }: { children: React.ReactNode }) {
-  const [participant, setParticipant] = useState<Participant | null>(null);
+  const { me, status, error: authError, reload } = useAuth();
   const [stats, setStats] = useState<ParticipantStats | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsError, setStatsError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
+  const loadStats = useCallback(async () => {
+    setStatsLoading(true);
+    setStatsError(null);
     try {
-      const [p, s] = await Promise.all([getMe(), getMyStats()]);
-      setParticipant(p);
-      setStats(s);
+      setStats(await getMyStats());
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to load participant data';
-      setError(msg);
-      // Keep previous data if any (don't wipe on refresh failure)
+      setStatsError(errorMessage(err, 'Failed to load participant data'));
     } finally {
-      setIsLoading(false);
+      setStatsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    if (status === 'authenticated') void loadStats();
+    else setStats(null);
+  }, [status, me?.id, loadStats]);
+
+  const refresh = useCallback(async () => {
+    await Promise.all([reload(), loadStats()]);
+  }, [reload, loadStats]);
 
   return (
     <ParticipantContext.Provider
       value={{
-        participant,
+        participant: me,
         stats,
-        isLoading,
-        error,
+        isLoading: status === 'loading' || (status === 'authenticated' && (!me || (statsLoading && !stats))),
+        error: statsError ?? authError,
         refresh,
-        totalPoints: participant?.points ?? 0,
-        globalRank: participant?.globalRank ?? 0,
-        currentStreak: stats?.streak.current ?? 0,
+        totalPoints: me?.points ?? 0,
+        globalRank: me?.globalRank ?? 0,
+        currentStreak: stats?.streak.current ?? me?.currentStreak ?? 0,
       }}
     >
       {children}

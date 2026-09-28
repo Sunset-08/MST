@@ -1,7 +1,25 @@
 import { readConfig } from "./challenge-config.js";
 import type { VerificationInput, VerificationOutcome, VerificationProvider, VerificationType } from "./types.js";
 
-const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
+const norm = (s: string) => s.trim().toLowerCase().replace(/[^\p{L}\p{N}\s._-]/gu, " ").replace(/\s+/g, " ").trim();
+/** Free-text answers longer than this are only accepted on an exact match, so an essay cannot pass by listing keywords. */
+const MAX_CONTAINS_LENGTH = 400;
+
+/**
+ * Multiple-choice: exact option id. Free text: equal to an accepted answer, or (for short answers) containing an
+ * accepted phrase as whole words, e.g. accepted "second verifier" matches "Require a second verifier".
+ */
+function matches(question: { type: string }, accepted: string[], answer: string): boolean {
+  const a = norm(answer);
+  if (!a) return false;
+  return accepted.some((k) => {
+    const key = norm(k);
+    if (!key) return false;
+    if (a === key) return true;
+    if (question.type === "multiple_choice" || answer.length > MAX_CONTAINS_LENGTH) return false;
+    return ` ${a} `.includes(` ${key} `);
+  });
+}
 
 /** Grades question answers against server-held answer keys. */
 export class RuleBasedVerificationProvider implements VerificationProvider {
@@ -36,7 +54,7 @@ export class RuleBasedVerificationProvider implements VerificationProvider {
         return { status: "pending", reason: "This challenge includes answers that require manual review" };
       }
       total += q.points;
-      if (answer !== undefined && keys.some((k) => norm(k) === norm(answer!))) {
+      if (answer !== undefined && matches(q, keys, answer)) {
         earned += q.points;
         correct++;
       }

@@ -1,4 +1,5 @@
 import { GitHubService } from "../integrations/github/github.service.js";
+import { GitHubConnectService } from "./github-connect.service.js";
 import { GitHubWebhookService } from "../integrations/github/webhooks.js";
 import { VerificationService } from "../verification/engine.js";
 import { AdminService } from "./admin.service.js";
@@ -22,6 +23,7 @@ export function createServices(deps: ServiceDeps) {
     rewards,
     github,
     githubWebhooks: new GitHubWebhookService(deps),
+    githubConnect: new GitHubConnectService(deps),
     users: new UsersService(deps),
     challenges: new ChallengesService(deps),
     submissions: new SubmissionsService(deps, verification),

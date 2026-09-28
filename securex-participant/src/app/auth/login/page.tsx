@@ -6,11 +6,14 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ShieldCheck, GitBranch, Mail, Lock, Eye, EyeOff, ArrowRight, Zap } from 'lucide-react';
+import { ShieldCheck, Mail, Lock, Eye, EyeOff, ArrowRight, Zap } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/context/AuthContext';
+import { errorMessage } from '@/lib/api/client';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -22,22 +25,15 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      // TODO: Member 3 — connect NextAuth credentials provider
-      // For demo, redirect directly to dashboard
-      await new Promise((r) => setTimeout(r, 800));
-      router.push('/dashboard');
-    } catch {
-      setError('Invalid credentials. Please try again.');
+      const me = await login(email.trim(), password);
+      if (me.role === 'platform_admin') router.push('/admin/dashboard');
+      else if (me.requirements.githubConnection && !me.github.connected) router.push('/auth/onboarding');
+      else router.push('/dashboard');
+    } catch (err) {
+      setError(errorMessage(err, 'Sign in failed. Please try again.'));
     } finally {
       setLoading(false);
     }
-  }
-
-  async function handleGitBranchLogin() {
-    setLoading(true);
-    // TODO: Member 3 — signIn('github') from next-auth/react
-    await new Promise((r) => setTimeout(r, 500));
-    router.push('/dashboard');
   }
 
   return (
@@ -67,23 +63,6 @@ export default function LoginPage() {
           <div>
             <h2 className="text-xl font-bold text-white">Welcome back</h2>
             <p className="text-sm text-slate-500 mt-1">Sign in to your participant account</p>
-          </div>
-
-          {/* GitHub OAuth */}
-          <button
-            id="github-login-btn"
-            onClick={handleGitBranchLogin}
-            disabled={loading}
-            className="sx-btn sx-btn-secondary w-full gap-3"
-          >
-            <GitBranch size={18} />
-            Continue with GitHub
-          </button>
-
-          <div className="flex items-center gap-3">
-            <div className="flex-1 h-px bg-white/5" />
-            <span className="text-xs text-slate-600">or sign in with email</span>
-            <div className="flex-1 h-px bg-white/5" />
           </div>
 
           {/* Email form */}
@@ -125,12 +104,6 @@ export default function LoginPage() {
               >
                 {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
               </button>
-            </div>
-
-            <div className="flex justify-end">
-              <Link href="/auth/forgot-password" className="text-xs text-blue-400 hover:text-blue-300">
-                Forgot password?
-              </Link>
             </div>
 
             <button

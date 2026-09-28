@@ -3,13 +3,10 @@
 // ============================================================
 
 import type { LeaderboardEntry, LeaderboardFilters } from '@/lib/types';
-import { USE_MOCK, apiGet } from './client';
-import { MOCK_LEADERBOARD } from './mock/data';
+import { apiGet, toQuery } from './client';
 
-export async function getLeaderboard(
-  filters?: LeaderboardFilters,
-): Promise<LeaderboardEntry[]> {
-  if (USE_MOCK) return MOCK_LEADERBOARD;
+export async function getLeaderboard(filters?: LeaderboardFilters & { organizationId?: string }): Promise<LeaderboardEntry[]> {
   const period = filters?.period ?? 'global';
-  return apiGet(`/leaderboard?period=${period}`);
+  if (period === 'organization' && !filters?.organizationId) return [];
+  return apiGet(`/leaderboard${toQuery({ period, organizationId: period === 'organization' ? filters?.organizationId : undefined })}`);
 }

@@ -9,34 +9,10 @@
 import { OrgShell } from '@/components/org/OrgShell';
 import { useOrg } from '@/lib/context/OrgContext';
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import { listOrgChallenges, type OrgChallengeRow } from '@/lib/api/org';
+import { errorMessage } from '@/lib/api/client';
 import { PlusCircle, Lock, Shield, TrendingUp } from 'lucide-react';
-
-const MOCK_ORG_CHALLENGES = [
-  {
-    id: 'och-001',
-    title: 'SQL Injection in Auth Module',
-    category: 'Authentication',
-    difficulty: 'hard',
-    status: 'published',
-    attempts: 12,
-    mstReward: 50,
-    pointsReward: 500,
-    questions: 4,
-    createdAt: '2026-09-20T10:00:00Z',
-  },
-  {
-    id: 'och-002',
-    title: 'XSS in Dashboard Input',
-    category: 'Web Security',
-    difficulty: 'medium',
-    status: 'draft',
-    attempts: 0,
-    mstReward: 25,
-    pointsReward: 250,
-    questions: 3,
-    createdAt: '2026-09-25T10:00:00Z',
-  },
-];
 
 const DIFFICULTY_STYLE: Record<string, { color: string; bg: string }> = {
   easy: { color: '#34d399', bg: 'rgba(52, 211, 153, 0.1)' },
@@ -46,7 +22,14 @@ const DIFFICULTY_STYLE: Record<string, { color: string; bg: string }> = {
 };
 
 export default function OrgChallengesPage() {
-  const { mstStatus } = useOrg();
+  const { mstStatus, organization } = useOrg();
+  const [challenges, setChallenges] = useState<OrgChallengeRow[]>([]);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!organization) return;
+    listOrgChallenges({ limit: 100 }).then((r) => setChallenges(r.data)).catch((e) => setError(errorMessage(e)));
+  }, [organization]);
   const isMstSatisfied =
     mstStatus?.paymentStatus === 'PAYMENT_CONFIRMED' ||
     mstStatus?.paymentStatus === 'READY_TO_PUBLISH';
@@ -58,7 +41,7 @@ export default function OrgChallengesPage() {
           <div>
             <h1 className="text-2xl font-bold text-white">Your Challenges</h1>
             <p className="text-slate-500 text-sm mt-1">
-              {MOCK_ORG_CHALLENGES.length} challenge{MOCK_ORG_CHALLENGES.length !== 1 ? 's' : ''} configured
+              {challenges.length} challenge{challenges.length !== 1 ? 's' : ''} configured
             </p>
           </div>
           {isMstSatisfied ? (
@@ -83,9 +66,10 @@ export default function OrgChallengesPage() {
           )}
         </div>
 
+        {error && <p className="text-sm text-rose-400">{error}</p>}
         <div className="space-y-3">
-          {MOCK_ORG_CHALLENGES.map((ch) => {
-            const diffStyle = DIFFICULTY_STYLE[ch.difficulty] ?? DIFFICULTY_STYLE.easy;
+          {challenges.map((ch) => {
+            const diffStyle = DIFFICULTY_STYLE[ch.difficulty.toLowerCase()] ?? DIFFICULTY_STYLE.easy;
             return (
               <div key={ch.id} className="sx-card sx-card-interactive p-5">
                 <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -113,9 +97,9 @@ export default function OrgChallengesPage() {
                     </div>
                     <h3 className="text-sm font-semibold text-white">{ch.title}</h3>
                     <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
-                      <span>{ch.questions} questions</span>
+                      <span>{ch.challengeConfig.questions?.length ?? 0} questions</span>
                       <span>•</span>
-                      <span>{ch.attempts} attempts</span>
+                      <span>{ch.attempts ?? 0} attempts · {ch.verified ?? 0} verified</span>
                     </div>
                   </div>
                   <div className="text-right space-y-1">
@@ -131,7 +115,7 @@ export default function OrgChallengesPage() {
           })}
         </div>
 
-        {MOCK_ORG_CHALLENGES.length === 0 && (
+        {challenges.length === 0 && (
           <div
             className="sx-card p-12 text-center"
             style={{ border: '1px dashed rgba(139, 92, 246, 0.2)' }}

@@ -93,7 +93,7 @@ export default function AdminDashboardPage() {
               <StatCard label="Pending Reviews" value={stats.pendingReviews} icon={Clock} color="#f59e0b" href="/admin/submissions" />
               <StatCard label="Verified Submissions" value={stats.verifiedSubmissions} icon={CheckCircle} color="#34d399" href="/admin/submissions" />
               <StatCard label="MST Distributed" value={`${stats.totalMstDistributed.toLocaleString()} MSTC`} icon={Coins} color="#34d399" href="/admin/rewards" />
-              <StatCard label="Submission Rate" value={`${Math.round((stats.verifiedSubmissions / (stats.verifiedSubmissions + 312)) * 100)}%`} icon={TrendingUp} color="#3b82f6" />
+              <StatCard label="Submission Rate" value={`${stats.submissionRate}%`} icon={TrendingUp} color="#3b82f6" />
             </div>
 
             {/* Weekly activity */}

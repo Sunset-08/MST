@@ -7,9 +7,10 @@
 
 import { use, useEffect, useState } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
-import { getChallengeById } from '@/lib/api/challenges';
-import { submitAttempt } from '@/lib/api/submissions';
-import type { Challenge, VerificationResult } from '@/lib/types';
+import { getChallengeById, startChallenge } from '@/lib/api/challenges';
+import { errorMessage } from '@/lib/api/client';
+import { submitAttempt, waitForVerification, type SubmissionPayload } from '@/lib/api/submissions';
+import type { Challenge, ChallengeAttempt, ChallengeQuestionPublic, VerificationResult } from '@/lib/types';
 import { cn, DIFFICULTY_BG, formatPoints } from '@/lib/utils';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -89,37 +90,67 @@ function CodeFixForm({
 }
 
 function InvestigationForm({
+  questions,
   value,
   onChange,
 }: {
+  questions: ChallengeQuestionPublic[];
   value: Record<string, string>;
   onChange: (k: string, v: string) => void;
 }) {
+  if (questions.length === 0) {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-slate-300">Describe your findings for the reviewer.</p>
+        <textarea
+          id="submission-findings"
+          placeholder="What is the vulnerability, how is it exploited, where is it in the code, and how would you fix it?"
+          value={value.findings ?? ''}
+          onChange={(e) => onChange('findings', e.target.value)}
+          className="sx-textarea"
+          rows={8}
+          required
+        />
+      </div>
+    );
+  }
   return (
     <div className="space-y-5">
       <div className="bg-blue-400/5 border border-blue-400/15 rounded-xl p-4">
-        <p className="text-sm text-slate-300">
-          Answer the following questions about the security vulnerability in the challenge repository.
-        </p>
+        <p className="text-sm text-slate-300">Answer the following questions about the security vulnerability.</p>
       </div>
 
-      {[
-        { key: 'q1', label: 'Describe the primary vulnerability you identified', placeholder: 'The vulnerability is a [type] that allows...' },
-        { key: 'q2', label: 'What is the attack vector?', placeholder: 'An attacker can exploit this by...' },
-        { key: 'q3', label: 'What is the potential impact?', placeholder: 'This could allow an attacker to...' },
-        { key: 'q4', label: 'Which file(s) and line(s) contain the vulnerable code?', placeholder: 'src/auth/middleware.js:45' },
-      ].map(({ key, label, placeholder }) => (
-        <div key={key}>
-          <label className="block text-sm font-semibold text-slate-300 mb-2">{label} *</label>
-          <textarea
-            id={`submission-${key}`}
-            placeholder={placeholder}
-            value={value[key] ?? ''}
-            onChange={(e) => onChange(key, e.target.value)}
-            className="sx-textarea"
-            rows={3}
-            required
-          />
+      {questions.map((q, i) => (
+        <div key={q.id}>
+          <label className="block text-sm font-semibold text-slate-300 mb-2">
+            {i + 1}. {q.questionText} *
+          </label>
+          {q.type === 'multiple_choice' && q.options ? (
+            <div className="space-y-2">
+              {q.options.map((o) => (
+                <label key={o.id} className="flex items-center gap-3 rounded-lg border border-white/10 px-3 py-2 cursor-pointer hover:bg-white/5">
+                  <input
+                    type="radio"
+                    name={`q-${q.id}`}
+                    value={o.id}
+                    checked={value[q.id] === o.id}
+                    onChange={() => onChange(q.id, o.id)}
+                    required
+                  />
+                  <span className="text-sm text-slate-300"><strong className="text-white">{o.id}.</strong> {o.text}</span>
+                </label>
+              ))}
+            </div>
+          ) : (
+            <textarea
+              id={`submission-${q.id}`}
+              value={value[q.id] ?? ''}
+              onChange={(e) => onChange(q.id, e.target.value)}
+              className="sx-textarea"
+              rows={q.type === 'short_answer' ? 2 : 4}
+              required
+            />
+          )}
         </div>
       ))}
     </div>
@@ -193,50 +224,72 @@ export default function ChallengeWorkspacePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const router = useRouter();
   const [challenge, setChallenge] = useState<Challenge | null>(null);
+  const [attempt, setAttempt] = useState<ChallengeAttempt | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<VerificationResult | null>(null);
   const [submitError, setSubmitError] = useState('');
 
+  // Load the challenge and create (or resume) the participant's attempt.
   useEffect(() => {
-    getChallengeById(id)
-      .then(setChallenge)
-      .catch(console.error)
-      .finally(() => setIsLoading(false));
+    let cancelled = false;
+    (async () => {
+      try {
+        const c = await getChallengeById(id);
+        if (cancelled) return;
+        setChallenge(c);
+        setAttempt(await startChallenge(id));
+      } catch (err) {
+        if (!cancelled) setLoadError(errorMessage(err, 'Could not open this challenge'));
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [id]);
 
   function updateField(k: string, v: string) {
     setFormData((prev) => ({ ...prev, [k]: v }));
   }
 
+  function buildPayload(c: Challenge): SubmissionPayload {
+    const base: SubmissionPayload = { challengeId: c.id, type: c.type };
+    if (c.type === 'Investigation') {
+      const structuredAnswers = Object.fromEntries(Object.entries(formData).filter(([, v]) => v.trim() !== ''));
+      return { ...base, structuredAnswers };
+    }
+    return { ...base, ...formData };
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!challenge) return;
+    if (!challenge || !attempt) return;
     setSubmitting(true);
     setSubmitError('');
-
     try {
-      const pendingResult = await submitAttempt('attempt-demo', {
-        challengeId: challenge.id,
-        type: challenge.type,
-        ...formData,
-      } as Parameters<typeof submitAttempt>[1]);
-
-      setResult(pendingResult);
-
-      // Poll for result in mock (simulate verification)
-      if (pendingResult.status === 'Pending') {
-        const { getVerificationResult } = await import('@/lib/api/submissions');
-        const final = await getVerificationResult(pendingResult.submissionId);
-        setResult(final);
-      }
+      const pending = await submitAttempt(attempt.id, buildPayload(challenge));
+      setResult(pending);
+      // Rule-based challenges verify within moments; manual reviews stay Pending until a reviewer decides.
+      await waitForVerification(pending.submissionId, setResult);
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : 'Submission failed');
+      setSubmitError(errorMessage(err, 'Submission failed'));
+      setResult(null);
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleRetry() {
+    setResult(null);
+    setFormData({});
+    setSubmitError('');
+    try {
+      setAttempt(await startChallenge(id));
+    } catch (err) {
+      setSubmitError(errorMessage(err, 'Could not start a new attempt'));
     }
   }
 
@@ -260,7 +313,17 @@ export default function ChallengeWorkspacePage({
     );
   }
 
-  if (!challenge) return null;
+  if (!challenge || !attempt) {
+    return (
+      <AppShell>
+        <div className="max-w-md mx-auto text-center py-20 space-y-4">
+          <AlertTriangle size={36} className="text-amber-400 mx-auto" />
+          <p className="text-slate-300">{loadError || 'This challenge is not available.'}</p>
+          <Link href={`/challenges/${id}`} className="sx-btn sx-btn-secondary inline-flex">Back to challenge</Link>
+        </div>
+      </AppShell>
+    );
+  }
 
   // Show verification result
   if (result) {
@@ -274,9 +337,9 @@ export default function ChallengeWorkspacePage({
             <VerifiedCard result={result} challengeTitle={challenge.title} />
           )}
           {result.status === 'Failed' && (
-            <FailedCard result={result} onRetry={() => setResult(null)} />
+            <FailedCard result={result} onRetry={handleRetry} />
           )}
-          {result.status === 'Pending' && <PendingCard />}
+          {result.status === 'Pending' && <PendingCard reason={result.reason ?? undefined} />}
         </div>
       </AppShell>
     );
@@ -303,6 +366,9 @@ export default function ChallengeWorkspacePage({
             <h1 className="font-bold text-white">{challenge.title}</h1>
           </div>
           <div className="flex items-center gap-4 text-sm">
+            {attempt.maxAttempts ? (
+              <span className="text-xs text-slate-500">Attempt {attempt.attemptNumber} of {attempt.maxAttempts}</span>
+            ) : null}
             <span className="flex items-center gap-1.5 text-amber-400 font-bold">
               <Zap size={14} />
               +{formatPoints(challenge.pointsReward)} pts on verify
@@ -346,7 +412,7 @@ export default function ChallengeWorkspacePage({
             <CodeFixForm value={formData} onChange={updateField} />
           )}
           {challenge.type === 'Investigation' && (
-            <InvestigationForm value={formData} onChange={updateField} />
+            <InvestigationForm questions={challenge.questions ?? []} value={formData} onChange={updateField} />
           )}
           {challenge.type === 'SecurityReport' && (
             <SecurityReportForm value={formData} onChange={updateField} />

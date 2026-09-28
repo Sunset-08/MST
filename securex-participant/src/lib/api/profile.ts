@@ -2,31 +2,12 @@
 // SECUREX — Profile / Participant API Service
 // ============================================================
 
-import type { Participant, ParticipantStats, ChallengeHistoryEntry, Reward } from '@/lib/types';
-import { USE_MOCK, apiGet } from './client';
-import { MOCK_PARTICIPANT, MOCK_STATS, MOCK_CHALLENGE_HISTORY, MOCK_REWARDS } from './mock/data';
+import type { ChallengeHistoryEntry, Me, Participant, ParticipantStats, Reward } from '@/lib/types';
+import { apiGet, apiPut } from './client';
 
-export async function getMe(): Promise<Participant> {
-  if (USE_MOCK) return MOCK_PARTICIPANT;
-  return apiGet('/users/me');
-}
-
-export async function getMyStats(): Promise<ParticipantStats> {
-  if (USE_MOCK) return MOCK_STATS;
-  return apiGet('/users/me/stats');
-}
-
-export async function getMyHistory(): Promise<ChallengeHistoryEntry[]> {
-  if (USE_MOCK) return MOCK_CHALLENGE_HISTORY;
-  return apiGet('/users/me/history');
-}
-
-export async function getMyRewards(): Promise<Reward[]> {
-  if (USE_MOCK) return MOCK_REWARDS;
-  return apiGet('/rewards');
-}
-
-export async function getProfile(username: string): Promise<Participant> {
-  if (USE_MOCK) return { ...MOCK_PARTICIPANT, username };
-  return apiGet(`/users/${username}`);
-}
+export const getMe = () => apiGet<Me>('/users/me');
+export const getMyStats = () => apiGet<ParticipantStats>('/users/me/stats');
+export const getMyHistory = () => apiGet<ChallengeHistoryEntry[]>('/users/me/history');
+export const getMyRewards = () => apiGet<Reward[]>('/rewards');
+export const getProfile = (username: string) => apiGet<Participant>(`/users/${encodeURIComponent(username)}`, { auth: false });
+export const updateProfile = (patch: { displayName?: string; bio?: string | null }) => apiPut<Me>('/users/me', patch);

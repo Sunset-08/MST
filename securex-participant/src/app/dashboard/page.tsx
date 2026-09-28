@@ -12,17 +12,20 @@ import { ChallengeCard } from '@/components/participant/challenges/ChallengeCard
 import { formatPoints, DIFFICULTY_COLORS } from '@/lib/utils';
 import { Zap, Flame, Trophy, Shield, TrendingUp, Clock, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
-import { MOCK_CHALLENGES, MOCK_CHALLENGE_HISTORY } from '@/lib/api/mock/data';
-import type { Difficulty } from '@/lib/types';
-
-const FEATURED_CHALLENGES = MOCK_CHALLENGES.filter(
-  (c) => !c.status || c.status === 'Not Started',
-).slice(0, 3);
-
-const RECENT_ACTIVITY = MOCK_CHALLENGE_HISTORY.slice(0, 5);
+import { useEffect, useState } from 'react';
+import { getChallenges } from '@/lib/api/challenges';
+import { getMyHistory } from '@/lib/api/profile';
+import type { Challenge, ChallengeHistoryEntry, Difficulty } from '@/lib/types';
 
 export default function DashboardPage() {
   const { participant, stats, isLoading, error, refresh } = useParticipant();
+  const [featured, setFeatured] = useState<Challenge[]>([]);
+  const [recent, setRecent] = useState<ChallengeHistoryEntry[]>([]);
+
+  useEffect(() => {
+    getChallenges({ status: 'Not Started', limit: 3 }).then((r) => setFeatured(r.data)).catch(() => setFeatured([]));
+    getMyHistory().then((h) => setRecent(h.slice(0, 5))).catch(() => setRecent([]));
+  }, []);
 
   if (isLoading) {
     return (
@@ -148,9 +151,14 @@ export default function DashboardPage() {
             </div>
 
             <div className="space-y-4">
-              {FEATURED_CHALLENGES.map((c) => (
+              {featured.map((c) => (
                 <ChallengeCard key={c.id} challenge={c} />
               ))}
+              {featured.length === 0 && (
+                <div className="sx-card p-6 text-center text-sm text-slate-500">
+                  No new challenges available right now. Check back after organizations publish more.
+                </div>
+              )}
             </div>
           </div>
 
@@ -205,7 +213,8 @@ export default function DashboardPage() {
                 Recent Activity
               </h3>
               <div className="space-y-3">
-                {RECENT_ACTIVITY.map((entry) => (
+                {recent.length === 0 && <p className="text-sm text-slate-500">No activity yet. Start a challenge to get going.</p>}
+                {recent.map((entry) => (
                   <div key={entry.challengeId} className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <p className="text-sm text-slate-300 truncate">{entry.title}</p>
@@ -213,10 +222,12 @@ export default function DashboardPage() {
                         {entry.difficulty}
                       </p>
                     </div>
-                    {entry.status === 'Verified' && (
+                    {entry.status === 'Verified' ? (
                       <span className="text-xs text-emerald-400 flex-shrink-0 flex items-center gap-1">
                         <CheckCircle size={12} /> Verified
                       </span>
+                    ) : (
+                      <span className="text-xs text-slate-400 flex-shrink-0">{entry.status}</span>
                     )}
                   </div>
                 ))}

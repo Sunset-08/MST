@@ -1,27 +1,27 @@
 'use client';
 
 // ============================================================
-// SECUREX — Wallet Button (BridgeKey via wagmi injected)
+// SECUREX — Wallet Button (BridgeKey / injected EVM wallet via wagmi)
+// Connect is read-only. Linking a wallet needs an explicit signature (no transaction, no gas).
 // ============================================================
 
-import { useAccount, useConnect, useDisconnect } from 'wagmi';
+import { useConnect } from 'wagmi';
 import { injected } from 'wagmi/connectors';
-import { Wallet, ChevronDown, ExternalLink } from 'lucide-react';
+import { Wallet, ChevronDown, ExternalLink, AlertTriangle, Link2, CheckCircle } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { truncateAddress } from '@/lib/utils';
+import { explorerAddressUrl } from '@/lib/chain/mst';
+import { useWalletLink } from '@/lib/chain/useWalletLink';
 
 export function WalletButton() {
-  const { address, isConnected } = useAccount();
   const { connect, isPending } = useConnect();
-  const { disconnect } = useDisconnect();
+  const w = useWalletLink();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -36,7 +36,7 @@ export function WalletButton() {
     );
   }
 
-  if (isConnected && address) {
+  if (w.isConnected && w.address) {
     return (
       <div className="relative" ref={menuRef}>
         <button
@@ -44,19 +44,49 @@ export function WalletButton() {
           onClick={() => setMenuOpen(!menuOpen)}
           className="sx-btn sx-btn-sm sx-btn-secondary flex items-center gap-1.5"
         >
-          <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="text-xs font-mono">{truncateAddress(address)}</span>
+          <div className={`w-2 h-2 rounded-full ${w.wrongNetwork ? 'bg-amber-400' : w.isLinked ? 'bg-emerald-400 animate-pulse' : 'bg-blue-400'}`} />
+          <span className="text-xs font-mono">{truncateAddress(w.address)}</span>
           <ChevronDown size={12} className={`transition-transform ${menuOpen ? 'rotate-180' : ''}`} />
         </button>
 
         {menuOpen && (
-          <div className="absolute right-0 top-10 w-48 sx-card p-1 z-50 animate-fade-in">
+          <div className="absolute right-0 top-10 w-64 sx-card p-1 z-50 animate-fade-in">
             <div className="px-3 py-2 border-b border-white/5 mb-1">
-              <p className="text-xs text-slate-500 mb-1">BridgeKey Wallet</p>
-              <p className="text-xs font-mono text-slate-300">{truncateAddress(address)}</p>
+              <p className="text-xs text-slate-500 mb-1">Connected wallet</p>
+              <p className="text-xs font-mono text-slate-300 break-all">{w.address}</p>
+              <p className={`text-xs mt-1 flex items-center gap-1 ${w.isLinked ? 'text-emerald-400' : 'text-slate-500'}`}>
+                {w.isLinked ? <><CheckCircle size={11} /> Linked to your account</> : 'Not linked to your account yet'}
+              </p>
             </div>
+
+            {w.wrongNetwork && (
+              <button
+                id="wallet-switch-network-btn"
+                onClick={w.switchNetwork}
+                disabled={w.busy !== 'idle'}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-amber-400 hover:bg-amber-400/10 rounded-lg transition-colors"
+              >
+                <AlertTriangle size={12} />
+                {w.busy === 'switching' ? 'Switching…' : 'Switch to MST Testnet'}
+              </button>
+            )}
+
+            {!w.isLinked && (
+              <button
+                id="wallet-link-btn"
+                onClick={() => w.link().then(() => setMenuOpen(false)).catch(() => undefined)}
+                disabled={w.busy !== 'idle'}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-blue-300 hover:bg-blue-400/10 rounded-lg transition-colors"
+              >
+                <Link2 size={12} />
+                {w.busy === 'signing' ? 'Waiting for signature…' : 'Link this wallet (sign message)'}
+              </button>
+            )}
+
+            {w.error && <p className="px-3 py-2 text-xs text-rose-400">{w.error}</p>}
+
             <a
-              href={`https://explorer.mstblockchain.com/address/${address}`}
+              href={explorerAddressUrl(w.address)}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 px-3 py-2 text-xs text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
@@ -66,7 +96,7 @@ export function WalletButton() {
             </a>
             <button
               id="wallet-disconnect-btn"
-              onClick={() => { disconnect(); setMenuOpen(false); }}
+              onClick={() => { w.disconnect(); setMenuOpen(false); }}
               className="w-full flex items-center gap-2 px-3 py-2 text-xs text-rose-400 hover:bg-rose-400/10 rounded-lg transition-colors"
             >
               Disconnect

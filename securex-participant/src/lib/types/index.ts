@@ -53,6 +53,38 @@ export interface Participant {
   createdAt: string;
 }
 
+export interface LinkedWallet {
+  id: string;
+  address: string;
+  network: string;
+  isPrimary: boolean;
+  isVerified?: boolean;
+  verifiedAt: string | null;
+}
+
+export interface OrgMembership {
+  organizationId: string;
+  name: string;
+  slug: string;
+  role: 'owner' | 'admin' | 'member';
+}
+
+/** Authenticated user as returned by GET /users/me (server-side truth for roles and gamification). */
+export interface Me extends Participant {
+  email: string;
+  bio: string | null;
+  role: 'participant' | 'platform_admin';
+  levelTitle: string;
+  pointsToNextLevel: number;
+  currentStreak: number;
+  longestStreak: number;
+  lastActivityAt: string | null;
+  wallets: LinkedWallet[];
+  github: { username: string | null; connected: boolean };
+  organizations: OrgMembership[];
+  requirements: { githubConnection: boolean };
+}
+
 export interface ParticipantStats {
   totalPoints: number; // same as participant.points
   totalReputation: number;
@@ -61,6 +93,14 @@ export interface ParticipantStats {
   globalRank: number;
   streak: Streak;
   securityStats: SecurityStat[];
+}
+
+export interface ChallengeQuestionPublic {
+  id: string;
+  type: 'multiple_choice' | 'short_answer' | 'structured_response' | 'security_reasoning';
+  questionText: string;
+  options?: { id: string; text: string }[];
+  points: number;
 }
 
 export interface Challenge {
@@ -73,10 +113,18 @@ export interface Challenge {
   pointsReward: number; // Easy=100, Medium=250, Hard=500
   mstReward: number;
   githubRepo?: string;
+  githubRepoUrl?: string;
   githubIssueNumber?: number;
+  githubIssueUrl?: string;
   attempts: number;
   solved: number;
   type: ChallengeType;
+  verificationType?: string;
+  maxAttempts?: number | null;
+  expiresAt?: string | null;
+  isOpen?: boolean;
+  organization?: { id: string; name: string; slug: string };
+  questions?: ChallengeQuestionPublic[];
   tags?: string[];
   status?: ChallengeStatus; // per-participant status
   createdAt: string;
@@ -87,6 +135,9 @@ export interface ChallengeAttempt {
   challengeId: string;
   participantId: string;
   status: ChallengeStatus;
+  attemptNumber?: number;
+  maxAttempts?: number | null;
+  attemptsRemaining?: number | null;
   startedAt: string;
   submittedAt?: string;
   verifiedAt?: string;
@@ -118,12 +169,16 @@ export interface VerificationResult {
   submissionId: string;
   challengeId: string;
   status: 'Pending' | 'Verified' | 'Failed';
+  attemptId?: string;
+  verificationType?: string;
   pointsAwarded: number; // 0 if Failed, actual amount if Verified
   reputationAwarded: number;
   mstAwarded: number;
+  /** Pending / Processing / Confirmed / Failed once a reward exists; WalletRequired when a wallet must be linked. */
+  mstRewardStatus?: string | null;
   streakUpdated: boolean;
-  reason?: string; // provided by backend if failed
-  verifiedAt?: string;
+  reason?: string | null; // provided by backend if failed
+  verifiedAt?: string | null;
 }
 
 // ============================================================
@@ -178,10 +233,16 @@ export interface Reward {
   id: string;
   challengeId: string;
   challengeTitle: string;
+  submissionId?: string;
   mstAmount: number;
+  token?: string;
+  network?: string;
+  walletAddress?: string;
   status: 'Pending' | 'Processing' | 'Confirmed' | 'Failed';
   transactionHash?: string;
+  explorerUrl?: string;
   confirmedAt?: string;
+  paidAt?: string | null;
   createdAt: string;
 }
 
@@ -198,6 +259,7 @@ export interface ChallengeHistoryEntry {
   status: ChallengeStatus;
   completedAt?: string;
   reward?: Reward;
+  attempts?: number;
 }
 
 // ============================================================

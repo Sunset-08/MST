@@ -6,11 +6,15 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ShieldCheck, GitBranch, Mail, Lock, User, ArrowRight } from 'lucide-react';
+import { ShieldCheck, Mail, Lock, User, ArrowRight, CheckCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/context/AuthContext';
+import { errorMessage } from '@/lib/api/client';
 
 export default function SignupPage() {
   const router = useRouter();
+  const { register } = useAuth();
+  const [confirmEmail, setConfirmEmail] = useState(false);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ username: '', email: '', password: '' });
   const [error, setError] = useState('');
@@ -24,11 +28,12 @@ export default function SignupPage() {
     setLoading(true);
     setError('');
     try {
-      // TODO: Member 3 — connect sign-up API
-      await new Promise((r) => setTimeout(r, 800));
-      router.push('/auth/onboarding');
-    } catch {
-      setError('Registration failed. Please try again.');
+      const username = form.username.trim();
+      const result = await register({ email: form.email.trim(), password: form.password, username, displayName: username });
+      if (result.emailConfirmationRequired) setConfirmEmail(true);
+      else router.push('/auth/onboarding');
+    } catch (err) {
+      setError(errorMessage(err, 'Registration failed. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -49,22 +54,17 @@ export default function SignupPage() {
           <p className="text-slate-500 text-sm mt-1">Start your security journey today</p>
         </div>
 
-        <div className="sx-card p-8 space-y-5">
-          <button
-            id="github-signup-btn"
-            onClick={() => { setLoading(true); router.push('/auth/onboarding'); }}
-            className="sx-btn sx-btn-secondary w-full gap-3"
-          >
-            <GitBranch size={18} />
-            Continue with GitHub
-          </button>
-
-          <div className="flex items-center gap-3">
-            <div className="flex-1 h-px bg-white/5" />
-            <span className="text-xs text-slate-600">or with email</span>
-            <div className="flex-1 h-px bg-white/5" />
+        {confirmEmail ? (
+          <div className="sx-card p-8 space-y-4 text-center">
+            <CheckCircle size={40} className="text-emerald-400 mx-auto" />
+            <h2 className="text-lg font-bold text-white">Check your email</h2>
+            <p className="text-sm text-slate-400">
+              We sent a confirmation link to <strong className="text-white">{form.email}</strong>. Confirm it, then sign in.
+            </p>
+            <Link href="/auth/login" className="sx-btn sx-btn-primary w-full">Go to Sign In</Link>
           </div>
-
+        ) : (
+        <div className="sx-card p-8 space-y-5">
           <form onSubmit={handleSubmit} className="space-y-4" id="signup-form">
             {error && (
               <div className="bg-rose-400/10 border border-rose-400/20 rounded-lg p-3">
@@ -83,6 +83,9 @@ export default function SignupPage() {
                 className="sx-input sx-input-icon-left"
                 required
                 minLength={3}
+                maxLength={24}
+                pattern="[A-Za-z0-9_]+"
+                title="Letters, numbers and underscores"
               />
             </div>
 
@@ -141,6 +144,7 @@ export default function SignupPage() {
             </Link>
           </p>
         </div>
+        )}
       </div>
     </div>
   );

@@ -126,6 +126,7 @@ function LeaderboardRow({ entry }: { entry: LeaderboardEntry }) {
 
 export default function LeaderboardPage() {
   const { participant } = useParticipant();
+  const organizationId = participant?.organizations?.[0]?.organizationId;
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [period, setPeriod] = useState<LeaderboardPeriod>('global');
   const [isLoading, setIsLoading] = useState(true);
@@ -134,14 +135,14 @@ export default function LeaderboardPage() {
   useEffect(() => {
     setIsLoading(true);
     setLoadError(null);
-    getLeaderboard({ period })
+    getLeaderboard({ period, organizationId })
       .then(setEntries)
       .catch((err) => {
         console.error(err);
         setLoadError(err instanceof Error ? err.message : 'Failed to load leaderboard');
       })
       .finally(() => setIsLoading(false));
-  }, [period]);
+  }, [period, organizationId]);
 
   const top3 = entries.slice(0, 3);
   const rest = entries.slice(3);
@@ -266,7 +267,11 @@ export default function LeaderboardPage() {
           ) : entries.length === 0 ? (
             <div className="text-center py-16">
               <Trophy size={40} className="text-slate-700 mx-auto mb-3" />
-              <p className="text-slate-400">No leaderboard data available yet.</p>
+              <p className="text-slate-400">
+                {period === 'organization' && !organizationId
+                  ? 'The organization leaderboard is visible to members of an organization.'
+                  : 'No leaderboard data available yet.'}
+              </p>
             </div>
           ) : (
             <div className="space-y-1">

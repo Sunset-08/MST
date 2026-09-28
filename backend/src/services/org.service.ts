@@ -98,6 +98,22 @@ export const reviewSchema = z.object({
 export class OrgService {
   constructor(private readonly deps: ServiceDeps, private readonly verification: VerificationService) {}
 
+  /**
+   * Funding gate for publishing. Rewards are paid from the platform RewardVault, so by default no organization
+   * deposit is required (MST_ORG_MIN_FUNDING=0). A positive minimum reports PAYMENT_REQUIRED because
+   * per-organization deposits are not tracked yet.
+   */
+  mstStatus() {
+    const minimumRequired = this.deps.config.orgMinFunding;
+    return {
+      minimumRequired,
+      amountPaid: 0,
+      paymentStatus: minimumRequired <= 0 ? "READY_TO_PUBLISH" : "PAYMENT_REQUIRED",
+      fundingSource: "platform_vault",
+      blockchain: this.deps.blockchain.status(),
+    };
+  }
+
   async stats(organizationId: string) {
     const { db } = this.deps;
     const [ch] = await db.select({

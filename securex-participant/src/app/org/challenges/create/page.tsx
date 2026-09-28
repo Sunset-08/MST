@@ -6,7 +6,7 @@
 // Route: /org/challenges/create
 // ============================================================
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { OrgShell } from '@/components/org/OrgShell';
 import { QuestionBuilder } from '@/components/org/QuestionBuilder';
@@ -14,6 +14,8 @@ import { PublishGate } from '@/components/org/PublishGate';
 import { OrgMstStatusCard } from '@/components/org/OrgMstStatusCard';
 import { useOrg } from '@/lib/context/OrgContext';
 import { validateChallengeDraft } from '@/lib/types/org';
+import { getOrgGithub, listOrgGithubIssues, type OrgGithubIssue, type OrgGithubOverview } from '@/lib/api/org';
+import Link from 'next/link';
 import {
   FileText,
   GitBranch,
@@ -168,6 +170,20 @@ export default function CreateChallengePage() {
   const { draft, updateDraft, mstStatus, publishChallenge } = useOrg();
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishSuccess, setPublishSuccess] = useState<string | null>(null);
+  const [publishError, setPublishError] = useState('');
+  const [github, setGithub] = useState<OrgGithubOverview | null>(null);
+  const [issues, setIssues] = useState<OrgGithubIssue[]>([]);
+
+  useEffect(() => {
+    getOrgGithub().then(setGithub).catch(() => setGithub(null));
+  }, []);
+
+  useEffect(() => {
+    if (!draft.githubRepositoryId) { setIssues([]); return; }
+    listOrgGithubIssues({ repositoryId: draft.githubRepositoryId, state: 'open', limit: 100 })
+      .then((r) => setIssues(r.data))
+      .catch(() => setIssues([]));
+  }, [draft.githubRepositoryId]);
 
   const isMstSatisfied =
     mstStatus?.paymentStatus === 'PAYMENT_CONFIRMED' ||
@@ -177,19 +193,26 @@ export default function CreateChallengePage() {
     ? validateChallengeDraft(draft, mstStatus)
     : { isValid: false, isMstSatisfied: false, missingFields: ['MST status unavailable'] };
 
-  async function handlePublish() {
-    if (!validation.isValid) return;
+  async function submit(status: 'published' | 'draft') {
     setIsPublishing(true);
+    setPublishError('');
     try {
-      const result = await publishChallenge();
+      const result = await publishChallenge(status);
       if (result.success) {
         setPublishSuccess(result.challengeId ?? 'new');
-        setTimeout(() => router.push('/org/dashboard'), 2000);
+        setTimeout(() => router.push('/org/challenges'), 2000);
+      } else {
+        setPublishError(result.error ?? 'Could not save the challenge');
       }
     } finally {
       setIsPublishing(false);
     }
   }
+
+  const handlePublish = () => (validation.isValid ? submit('published') : undefined);
+  const canSaveDraft =
+    draft.title.trim().length >= 3 && draft.description.trim().length >= 10 && !!draft.securityCategory &&
+    !!draft.difficulty && !!draft.challengeType && !!draft.verificationType;
 
   if (publishSuccess) {
     return (
@@ -202,11 +225,11 @@ export default function CreateChallengePage() {
             <CheckSquare size={32} style={{ color: '#34d399' }} />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-white">Challenge Published! 🎉</h2>
+            <h2 className="text-2xl font-bold text-white">Challenge saved 🎉</h2>
             <p className="text-slate-500 mt-2">
               Challenge ID: <code className="text-violet-400 font-mono">{publishSuccess}</code>
             </p>
-            <p className="text-slate-600 text-sm mt-1">Redirecting to dashboard...</p>
+            <p className="text-slate-600 text-sm mt-1">Redirecting to your challenges...</p>
           </div>
         </div>
       </OrgShell>
@@ -235,8 +258,8 @@ export default function CreateChallengePage() {
               <p className="text-sm font-semibold text-amber-300">MST Funding Required</p>
               <p className="text-xs text-amber-400/70 mt-0.5">
                 You can configure your challenge now, but publishing is locked until your
-                organization deposits at least{' '}
-                <strong>{mstStatus?.minimumRequired ?? 10} MSTC</strong>.
+                organization meets the minimum funding of{' '}
+                <strong>{mstStatus?.minimumRequired ?? 0} MSTC</strong>.
               </p>
             </div>
           </div>
@@ -283,35 +306,40 @@ export default function CreateChallengePage() {
 
             {/* 2. GitHub */}
             <Section title="GitHub Reference" icon={<GitBranch size={18} />} id="section-github">
-              <FieldRow>
-                <Field
-                  label="GitHub Repository"
-                  required
-                  hint="Full repository path (owner/repo)"
-                >
-                  <input
-                    id="challenge-github-repo"
-                    type="text"
-                    className="sx-input"
-                    placeholder="acmecorp/auth-service"
-                    value={draft.githubRepository}
-                    onChange={(e) => updateDraft({ githubRepository: e.target.value })}
-                  />
-                </Field>
-                <Field
-                  label="GitHub Issue Reference"
-                  hint="Issue number or URL"
-                >
-                  <input
-                    id="challenge-github-issue"
-                    type="text"
-                    className="sx-input"
-                    placeholder="#42 or https://github.com/.../issues/42"
-                    value={draft.githubIssueRef}
-                    onChange={(e) => updateDraft({ githubIssueRef: e.target.value })}
-                  />
-                </Field>
-              </FieldRow>
+              {github && github.installations.length === 0 ? (
+                <p className="text-sm text-slate-400">
+                  No GitHub account is connected yet.{' '}
+                  <Link href="/org/settings#github-section" className="text-violet-400 underline">Connect GitHub in Settings</Link>{' '}
+                  to pick a synchronized repository and issue.
+                </p>
+              ) : (
+                <FieldRow>
+                  <Field label="GitHub Repository" required hint="Repositories imported through the GitHub App">
+                    <SxSelect
+                      id="challenge-github-repo"
+                      value={draft.githubRepositoryId}
+                      onChange={(v) => {
+                        const repo = github?.repositories.find((r) => r.id === v);
+                        updateDraft({ githubRepositoryId: v, githubRepository: repo?.fullName ?? '', githubIssueId: '', githubIssueRef: '' });
+                      }}
+                      placeholder="Select repository..."
+                      options={(github?.repositories ?? []).filter((r) => r.isActive).map((r) => ({ value: r.id, label: r.fullName }))}
+                    />
+                  </Field>
+                  <Field label="GitHub Issue" hint="Optional: the issue this challenge is based on">
+                    <SxSelect
+                      id="challenge-github-issue"
+                      value={draft.githubIssueId}
+                      onChange={(v) => {
+                        const issue = issues.find((i) => i.id === v);
+                        updateDraft({ githubIssueId: v, githubIssueRef: issue ? `#${issue.number}` : '' });
+                      }}
+                      placeholder={draft.githubRepositoryId ? (issues.length ? 'Select issue...' : 'No open issues') : 'Select a repository first'}
+                      options={issues.map((i) => ({ value: i.id, label: `#${i.number} ${i.title}${i.linkedChallengeId ? ' (already a challenge)' : ''}` }))}
+                    />
+                  </Field>
+                </FieldRow>
+              )}
             </Section>
 
             {/* 3. Classification */}
@@ -464,6 +492,9 @@ export default function CreateChallengePage() {
             <PublishGate
               validation={validation}
               onPublish={handlePublish}
+              onSaveDraft={() => submit('draft')}
+              canSaveDraft={canSaveDraft}
+              error={publishError}
               isPublishing={isPublishing}
             />
 

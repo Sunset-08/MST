@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   Trophy,
@@ -14,6 +14,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useParticipant } from '@/lib/context/ParticipantContext';
+import { useAuth } from '@/lib/context/AuthContext';
 import { formatPoints } from '@/lib/utils';
 import { getLevelFromPoints } from '@/lib/constants/levels';
 
@@ -28,6 +29,8 @@ const NAV_ITEMS = [
 export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) {
   const pathname = usePathname();
   const { participant, totalPoints } = useParticipant();
+  const { logout } = useAuth();
+  const router = useRouter();
   const levelInfo = getLevelFromPoints(totalPoints);
 
   return (
@@ -100,10 +103,14 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
 
         {/* Bottom */}
         <div className="p-3 border-t border-white/5">
-          <Link href="/auth/login" className="sx-sidebar-link">
+          <button
+            id="participant-signout-btn"
+            onClick={async () => { await logout(); router.push('/auth/login'); }}
+            className="sx-sidebar-link w-full"
+          >
             <LogOut size={18} />
             <span>Sign Out</span>
-          </Link>
+          </button>
         </div>
       </aside>
     </>

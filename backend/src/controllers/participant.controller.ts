@@ -8,6 +8,10 @@ export function createParticipantController(s: Services) {
     me: handler(async (req, res) => ok(res, await s.users.me(req.securexUser!))),
     stats: handler(async (req, res) => ok(res, await s.users.stats(req.securexUser!))),
     history: handler(async (req, res) => ok(res, await s.users.history(req.securexUser!))),
+    updateMe: handler(async (req, res) => ok(res, await s.users.updateProfile(req.securexUser!.id, req.body))),
+    githubConnectStart: handler(async (req, res) => ok(res, await s.githubConnect.start(req.securexUser!))),
+    githubConnectPoll: handler(async (req, res) => ok(res, await s.githubConnect.poll(req.securexUser!, req.body))),
+    githubDisconnect: handler(async (req, res) => ok(res, await s.githubConnect.disconnect(req.securexUser!))),
     publicProfile: handler(async (req, res) => ok(res, await s.users.publicProfile(param(req.params.username)))),
 
     listChallenges: handler(async (req, res) => ok(res, await s.challenges.list(req.query, req.securexUser?.id))),
@@ -25,6 +29,8 @@ export function createParticipantController(s: Services) {
       ok(res, board.entries);
     }),
     rewards: handler(async (req, res) => ok(res, await s.rewards.listForUser(req.securexUser!.id))),
+    rewardClaimInfo: handler(async (req, res) => ok(res, await s.rewards.claimInfo(req.securexUser!.id, param(req.params.id)))),
+    rewardClaim: handler(async (req, res) => ok(res, await s.rewards.claim(req.securexUser!.id, param(req.params.id), req.body))),
 
     listWallets: handler(async (req, res) => ok(res, await s.wallets.list(req.securexUser!.id))),
     walletChallenge: handler(async (req, res) => ok(res, await s.wallets.createChallenge(req.securexUser!, req.body))),

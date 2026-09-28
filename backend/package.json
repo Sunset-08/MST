@@ -11,7 +11,10 @@
     "typecheck": "tsc -p tsconfig.test.json",
     "db:check": "drizzle-kit check",
     "db:generate": "drizzle-kit generate",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "seed": "tsx src/scripts/seed.ts",
+    "chain:configure": "tsx src/scripts/configure-chain.ts",
+    "chain:rehearse": "tsx src/scripts/rehearse-claims.ts"
   },
   "keywords": [],
   "author": "",

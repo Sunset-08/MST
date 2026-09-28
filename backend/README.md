@@ -30,7 +30,11 @@ Production: `npm run build` then `npm start` (runs `dist/server.js`).
 | `GITHUB_APP_PRIVATE_KEY_PATH` | for GitHub | Path to the App PEM key (keep under `backend/secrets/`, which is git-ignored) |
 | `GITHUB_WEBHOOK_SECRET` | for webhooks | Webhook secret configured in the GitHub App |
 | `GITHUB_API_URL`, `GITHUB_API_VERSION` | no | Defaults `https://api.github.com`, `2022-11-28` |
-| `MST_*` | later | Blockchain configuration; see "Blockchain" |
+| `GITHUB_APP_CLIENT_ID` | for participant GitHub connection | GitHub App client ID (device flow; no secret) |
+| `GITHUB_CONNECTION_REQUIRED` | no | `false` lets participants start challenges without GitHub (default `true`) |
+| `MST_*` | for rewards | Blockchain configuration; see "Blockchain" |
+| `MST_VERIFIER_PRIVATE_KEY` | for rewards | Server-only key with the verifier and reward roles |
+| `MST_REWARD_WEI_PER_UNIT` | no | Wei per reward unit (default 0.001 tMSTC) |
 
 Secrets are only read into the process. `GET /api/admin/settings` reports whether each integration is
 configured, never the values.
@@ -74,12 +78,14 @@ Enum values are returned with the frontend labels (`Easy`, `SecurityReport`, `Un
 
 | Area | Endpoints |
 |---|---|
-| Auth | `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` |
+| Auth | `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`, `POST /api/auth/refresh`, `GET /api/auth/me` |
 | Participant | `GET /api/users/me`, `GET /api/users/me/stats`, `GET /api/users/me/history`, `GET /api/users/:username` |
 | Challenges | `GET /api/challenges?search&difficulty&category&status&page&limit`, `GET /api/challenges/:id`, `POST /api/challenges/:id/start` |
 | Submissions | `POST /api/attempts/:attemptId/submit` (202 Pending), `GET /api/submissions/:submissionId/result` |
 | Leaderboard | `GET /api/leaderboard?period=global\|weekly\|monthly\|organization&organizationId&page&limit` (`X-Total-Count` header) |
 | Rewards | `GET /api/rewards` |
+| GitHub (participant) | `POST /api/github/connect/start`, `POST /api/github/connect/poll`, `DELETE /api/github/connect`, `PUT /api/users/me` |
+| Claims | `GET /api/rewards/:id/claim-info`, `POST /api/rewards/:id/claim` |
 | Wallets | `GET /api/wallets`, `POST /api/wallets/challenge`, `POST /api/wallets/verify`, `POST /api/wallets/:id/primary`, `DELETE /api/wallets/:id` |
 | Organizations | `GET/POST /api/organizations`, `GET/PUT/DELETE /api/organizations/:id`, `GET/POST /api/organizations/:id/members`, `PUT/DELETE /api/organizations/:id/members/:userId` |
 | Org dashboard | `GET /api/org/stats`, `GET /api/org/activity`, `GET/POST /api/org/challenges`, `PUT /api/org/challenges/:id`, `GET /api/org/submissions`, `POST /api/org/submissions/:id/review` |
@@ -149,17 +155,30 @@ webhook URL and secret must be configured in the GitHub App settings once the ba
 
 ## Blockchain (MST rewards)
 
-`src/integrations/blockchain` defines `BlockchainRewardProvider` (`sendReward`, `getTransactionStatus`).
-`MstRewardProvider` reads transaction status with standard EVM JSON-RPC (`eth_getTransactionReceipt`)
-once `MST_RPC_URL` and `MST_CHAIN_ID` are set. It checks that the RPC's chain ID matches. **Sending is
-pending:** it needs the finalized reward contract (`MST_REWARD_CONTRACT_ADDRESS`, `MST_REWARD_CONTRACT_ABI`)
-and a `RewardContractAdapter` that calls the contract's real function. SECUREX does not guess function
-names, invent addresses, or generate or store private keys.
+Rewards use the deployed SECUREX contracts (`../blockchain`): `ChallengeRegistry`, `SubmissionRegistry`, `RewardVault`.
+The vault pays native tMSTC only to a wallet whose on-chain submission was verified, so a reward is claimed in two steps
+(`src/integrations/blockchain/mst-claims.ts`):
 
-Reward lifecycle (`rewards.status`): `pending` (API shows Pending) → `submitted` (Processing, tx hash
-stored) → `confirmed` (Confirmed, only when the provider reports a successful receipt) or `failed`.
-Until the provider is configured, rewards stay Pending and `/api/admin/rewards/process` reports
-"blockchain not configured".
+1. `GET /api/rewards/:id/claim-info`: the backend registers the challenge on-chain if needed and derives a proof
+   commitment bound to challenge + wallet + the verified submission content (salt = HMAC of a server secret).
+2. The participant's wallet submits it with `submitProof` (an explicit transaction; they only pay gas).
+3. `POST /api/rewards/:id/claim { txHash }`: the backend confirms that receipt and its `SubmissionRecorded` event for
+   that wallet, verifies the submission on-chain with its verifier key, and calls `distributeReward`. The reward becomes
+   **Confirmed** only after the `RewardDistributed` event is seen. Retries are idempotent (no double payment).
+
+Lifecycle (`rewards.status`): `pending` (created; waiting for the claim) → `submitted` (claim running) → `confirmed`.
+A failed claim returns to `pending`. If the chain is not configured, claims answer `503 BLOCKCHAIN_NOT_CONFIGURED`.
+
+Setup after deploying the contracts:
+
+```sh
+cd ../blockchain && npm run deploy:mst      # needs a funded deployer wallet
+cd ../backend && npm run chain:configure    # writes MST_* addresses and the verifier key into .env
+```
+
+The verifier key defaults to the deployer key (which holds every role on a fresh deployment); use a dedicated key in
+production. Each reward is capped by the vault (`maxRewardPerSubmission`) and by its balance.
+`npm run chain:rehearse` runs the whole flow against a local EVM with the real contracts.
 
 ## Wallet linking (provider-agnostic, BridgeKey-ready)
 
@@ -176,10 +195,38 @@ Until the provider is configured, rewards stay Pending and `/api/admin/rewards/p
 EOA signatures only (EIP-1271 smart-contract wallets are not yet supported). Nothing sensitive (private
 keys, seed or recovery phrases) is ever requested or stored.
 
+## Participant GitHub connection
+
+Participants prove they own a GitHub account with the OAuth **device flow** (`src/integrations/github/user-auth.ts`), so
+no client secret or callback URL is needed:
+
+1. `POST /api/github/connect/start` returns a one-time `userCode`, the verification URL, and an opaque `flowToken`
+   (the device code inside it is encrypted server-side).
+2. The participant enters the code at github.com/login/device.
+3. The client polls `POST /api/github/connect/poll`; when GitHub authorizes, the backend reads the login name once
+   (the user token is discarded) and stores only `users.github_username`. One GitHub account links to one user.
+
+Setup: copy the GitHub App **Client ID** into `GITHUB_APP_CLIENT_ID` and enable **Device Flow** in the App settings.
+While `GITHUB_CONNECTION_REQUIRED=true` (default), starting a challenge answers `403 GITHUB_CONNECTION_REQUIRED`
+until GitHub is connected.
+
+## Development seed
+
+```sh
+npm run seed
+```
+
+Creates, through the real Supabase sign-up, an administrator, a participant and an organization owner; promotes the
+admin; creates the organization; and, when `GITHUB_INSTALLATION_ID` is set, links and syncs that GitHub installation.
+It is idempotent. Passwords are generated (or come from `SEED_*_PASSWORD`) and written to the git-ignored
+`.seed-credentials.json`; nothing is printed. If Supabase email confirmation is on, set `SEED_*_EMAIL` to real
+mailboxes, confirm them, and run the seed again. The participant is not pre-connected: they must connect GitHub and
+link a wallet themselves.
+
 ## Testing
 
 ```sh
-npm test          # 52 tests: real Postgres semantics via in-memory PGlite, no external services
+npm test          # 70 tests: real Postgres semantics via in-memory PGlite, no external services
 npm run typecheck # type-checks sources and tests
 npm run build
 ```
@@ -189,10 +236,10 @@ factory (`src/app.ts`) against a fresh PGlite database built from `schema.ts`.
 
 ## Pending external configuration
 
+- `SUPABASE_URL` / `SUPABASE_ANON_KEY` real values (project settings -> API).
+- `GITHUB_APP_CLIENT_ID` (+ Device Flow enabled) for participant GitHub connection.
 - `GITHUB_WEBHOOK_SECRET` and the webhook URL (needs a deployed backend URL).
-- GitHub App Setup URL (frontend page that posts `installationId` + `state`).
-- MST reward contract: address, ABI, the function to call and the signing model. After that, implement
-  `RewardContractAdapter` and pass it to `MstRewardProvider` in `src/server.ts`.
-- `MST_RPC_URL`, `MST_CHAIN_ID`, `MST_EXPLORER_URL` for transaction status.
+- GitHub App **Setup URL** = `<frontend>/org/github/callback` (finishes the organization install flow).
+- A funded MST Testnet deployer wallet to deploy the contracts, then `npm run chain:configure`.
 - An automated-test runner for `automated_test` challenges.
-- Organization MST funding (`OrgMstStatus` in the frontend) has no table in the current schema.
+- Per-organization MST deposits have no table in the current schema (`MST_ORG_MIN_FUNDING` defaults to 0).
