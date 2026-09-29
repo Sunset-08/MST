@@ -31,6 +31,12 @@ export function createOrganizationController(s: Services) {
     reviewSubmission: handler(async (req, res) =>
       ok(res, await s.org.review(ctx(req).organizationId, req.securexUser!.id, param(req.params.id), req.body))),
 
+    orgWallet: handler(async (req, res) => ok(res, await s.orgRewards.wallet(ctx(req).organizationId))),
+    orgWalletChallenge: handler(async (req, res) => ok(res, await s.orgRewards.walletChallenge(ctx(req).organizationId, req.securexUser!, req.body))),
+    orgWalletVerify: handler(async (req, res) => ok(res, await s.orgRewards.walletVerify(ctx(req).organizationId, req.securexUser!, req.body), 201)),
+    orgWalletUnlink: handler(async (req, res) => ok(res, await s.orgRewards.walletUnlink(ctx(req).organizationId))),
+    orgRewards: handler(async (req, res) => ok(res, await s.orgRewards.list(ctx(req).organizationId))),
+    orgRewardPay: handler(async (req, res) => ok(res, await s.orgRewards.pay(ctx(req).organizationId, param(req.params.id), req.body))),
     githubOverview: handler(async (req, res) => ok(res, await s.github.overview(ctx(req).organizationId))),
     githubInstallUrl: handler(async (req, res) => ok(res, await s.github.installUrl(ctx(req).organizationId, req.securexUser!.id))),
     githubLink: handler(async (req, res) => ok(res, await s.github.linkInstallation(ctx(req).organizationId, req.securexUser!, req.body), 201)),

@@ -26,7 +26,8 @@ export function VerifiedCard({
 }) {
   const reward = result.reward ?? null;
   const paid = reward?.status === 'Confirmed';
-  const claimable = reward && !paid && reward.walletAddress ? reward : null;
+  const byOrg = reward?.payment === 'organization';
+  const claimable = reward && !paid && !byOrg && reward.walletAddress ? reward : null;
   return (
     <div className="verification-verified p-8 text-center space-y-6 animate-fade-in">
       {/* Icon */}
@@ -79,13 +80,19 @@ export function VerifiedCard({
       {/* On-chain payout: confirmed transfer, or the claim that starts it */}
       {paid && reward?.transactionHash && (
         <div id="mst-payout-confirmed" className="bg-emerald-400/5 border border-emerald-400/20 rounded-xl p-4 text-left text-sm text-slate-300 space-y-1">
-          <p><strong className="text-emerald-400">{reward.mstAmount} MSTC sent to your wallet</strong> ({truncateAddress(reward.walletAddress ?? '')}).</p>
+          <p><strong className="text-emerald-400">{reward.mstAmount} MSTC sent to your wallet</strong> ({truncateAddress(reward.walletAddress ?? '')}){reward.funderAddress ? <> from {truncateAddress(reward.funderAddress)}</> : null}.</p>
           <p className="text-xs text-slate-500">
             Transaction{' '}
             <a href={reward.explorerUrl ?? explorerTxUrl(reward.transactionHash)} target="_blank" rel="noopener noreferrer" className="font-mono text-blue-400 hover:text-blue-300 break-all">
               {reward.transactionHash}
             </a>
           </p>
+        </div>
+      )}
+      {reward && !paid && byOrg && (
+        <div id="mst-payout-awaiting-org" className="bg-amber-400/5 border border-amber-400/20 rounded-xl p-4 text-left text-sm text-slate-300">
+          <strong className="text-amber-400">{reward.mstAmount} MSTC will be sent by {reward.organizationName ?? 'the organization'}.</strong>{' '}
+          Their wallet pays it directly to {truncateAddress(reward.walletAddress ?? '')}; it shows as paid once the transfer is confirmed on-chain.
         </div>
       )}
       {claimable && (

@@ -10,6 +10,7 @@ import express from "express";
 import { readFileSync } from "node:fs";
 import { JsonRpcProvider, Wallet, parseEther } from "ethers";
 import { MstRewardClaims } from "../integrations/blockchain/mst-claims.js";
+import { MstRewardProvider } from "../integrations/blockchain/mst-provider.js";
 import { eq } from "drizzle-orm";
 import { createApp } from "../app.js";
 import { loadConfig } from "../config/env.js";
@@ -66,7 +67,8 @@ async function main() {
   }
   const github = new FakeGitHub();
   const githubUser = new FakeGitHubUser();
-  const chain = new FakeChain();
+  // With a local EVM, reward payments are read from the real chain; otherwise an in-memory stand-in.
+  const chain = process.env.E2E_CHAIN_DEPLOYMENT ? new MstRewardProvider(config.mst) : new FakeChain();
   github.installations.set("165914364", {
     id: "165914364", account: { id: "77", login: "VishwasSharma28", type: "User", name: "Vishwas", htmlUrl: "https://github.com/VishwasSharma28" },
     repositorySelection: "selected", permissions: { issues: "read", metadata: "read" }, createdAt: new Date().toISOString(), suspendedAt: null,
@@ -142,22 +144,25 @@ async function main() {
     });
     res.json({ ok: true });
   });
-  outer.get("/__e2e/wallet", (_req, res) => { res.json({ address: testWallet.address }); });
+  // Second stand-in extension account, used as the organization's funding wallet (random, local only).
+  const orgWallet = Wallet.createRandom();
+  const pick = (req: express.Request) => (req.query.as === "org" ? orgWallet : testWallet);
+  outer.get("/__e2e/wallet", (req, res) => { res.json({ address: pick(req).address }); });
   outer.post("/__e2e/sign", async (req, res) => {
-    res.json({ signature: await testWallet.signMessage(String(req.body?.message ?? "")) });
+    res.json({ signature: await pick(req).signMessage(String(req.body?.message ?? "")) });
   });
-  // Stand-in for the wallet extension's eth_sendTransaction, funded from Hardhat account #0 on the local EVM.
-  const localSigner = new Wallet(testWallet.privateKey, localProvider);
+  // Stand-in for the wallet extension's eth_sendTransaction on the local EVM.
   outer.post("/__e2e/send", async (req, res) => {
     try {
       const { to, data, value } = req.body as { to: string; data?: string; value?: string };
-      const tx = await localSigner.sendTransaction({ to, data, value });
+      const tx = await new Wallet(pick(req).privateKey, localProvider).sendTransaction({ to, data, value });
       res.json({ hash: tx.hash });
     } catch (e) { res.status(400).json({ error: (e as Error).message }); }
   });
   if (process.env.E2E_CHAIN_DEPLOYMENT) {
     const funder = new Wallet("0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80", localProvider);
     await (await funder.sendTransaction({ to: testWallet.address, value: parseEther("1") })).wait();
+    await (await funder.sendTransaction({ to: orgWallet.address, value: parseEther("10") })).wait();
   }
   outer.use(app);
 

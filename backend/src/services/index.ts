@@ -8,6 +8,7 @@ import type { ServiceDeps } from "./deps.js";
 import { LeaderboardService } from "./leaderboard.service.js";
 import { OrganizationsService } from "./organizations.service.js";
 import { OrgService } from "./org.service.js";
+import { OrgRewardsService } from "./org-rewards.service.js";
 import { RewardsService } from "./rewards.service.js";
 import { SubmissionsService } from "./submissions.service.js";
 import { UsersService } from "./users.service.js";
@@ -31,6 +32,7 @@ export function createServices(deps: ServiceDeps) {
     wallets: new WalletsService(deps),
     organizations: new OrganizationsService(deps),
     org: new OrgService(deps, verification),
+    orgRewards: new OrgRewardsService(deps),
     admin: new AdminService(deps, verification, rewards, github),
   };
 }

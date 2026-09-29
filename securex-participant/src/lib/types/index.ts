@@ -249,6 +249,11 @@ export interface LeaderboardEntry {
 
 export interface Reward {
   id: string;
+  /** 'organization': paid directly by the challenge organization's wallet; 'claim': claimed from the vault. */
+  payment?: 'organization' | 'claim';
+  organizationName?: string;
+  /** Wallet that sent the payout on-chain. */
+  funderAddress?: string;
   challengeId: string;
   challengeTitle: string;
   submissionId?: string;

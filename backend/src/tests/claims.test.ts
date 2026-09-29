@@ -83,7 +83,7 @@ describe("reward claims", () => {
       const ok = await ctx.api("POST", `/api/rewards/${reward.id}/claim`, { token: u.token, body: { txHash: TX } });
       assert.equal(ok.status, 200, JSON.stringify(ok.body));
       assert.equal(ok.body.data.reward.status, "Confirmed");
-      assert.equal(ok.body.data.reward.transactionHash, `0x${"55".repeat(32)}`);
+      assert.match(ok.body.data.reward.transactionHash, /^0x55[0-9a-f]{62}$/);
       assert.ok(ok.body.data.reward.paidAt);
       assert.equal(ctx.claims.completed.at(-1)!.txHash, TX);
       const again = await ctx.api("POST", `/api/rewards/${reward.id}/claim`, { token: u.token, body: { txHash: TX } });
@@ -136,7 +136,7 @@ describe("reward payout readiness, honest result and vault funding", () => {
       assert.equal(after.body.data.mstAwarded, 5);
       assert.equal(after.body.data.mstPending, 0);
       assert.equal(after.body.data.reward.status, "Confirmed");
-      assert.equal(after.body.data.reward.transactionHash, `0x${"55".repeat(32)}`);
+      assert.match(after.body.data.reward.transactionHash, /^0x55[0-9a-f]{62}$/);
       assert.match(after.body.data.reward.explorerUrl, /\/tx\/0x55/);
       // Calling claim again (retry / double click) never pays twice.
       assert.equal((await ctx.api("POST", `/api/rewards/${reward.id}/claim`, { token: u.token, body: { txHash: TX } })).status, 409);

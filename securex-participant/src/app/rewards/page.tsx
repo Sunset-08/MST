@@ -139,7 +139,13 @@ export default function RewardsPage() {
                   transactionHash={reward.transactionHash}
                   status={reward.status}
                 />
-                {(reward.status === 'Pending' || reward.status === 'Failed') && (
+                {reward.status === 'Confirmed' && reward.funderAddress && (
+                  <p className="text-xs text-slate-500 px-1">Paid from <span className="font-mono">{reward.funderAddress}</span>{reward.organizationName ? ` (${reward.organizationName})` : ''}</p>
+                )}
+                {reward.status !== 'Confirmed' && reward.payment === 'organization' && (
+                  <p className="text-xs text-amber-400 px-1">Awaiting payment from {reward.organizationName ?? 'the organization'}&apos;s wallet to {reward.walletAddress}.</p>
+                )}
+                {(reward.status === 'Pending' || reward.status === 'Failed') && reward.payment !== 'organization' && (
                   <RewardClaim reward={reward} onClaimed={(r) => setRewards((all) => all.map((x) => (x.id === r.id ? r : x)))} />
                 )}
               </div>

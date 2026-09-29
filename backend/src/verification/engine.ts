@@ -1,6 +1,6 @@
 import { explorerTxUrl } from "../integrations/blockchain/mst-provider.js";
 import { and, eq, ne } from "drizzle-orm";
-import { challengeAttempts, challenges, reputationEvents, rewards, submissions, verifications } from "../db/schema.js";
+import { challengeAttempts, challenges, organizations, reputationEvents, rewards, submissions, verifications } from "../db/schema.js";
 import type { ServiceDeps } from "../services/deps.js";
 import { applyVerifiedSubmission, VERIFIED_EVENT } from "../services/gamification.service.js";
 import { iso } from "../utils/dates.js";
@@ -119,6 +119,8 @@ export class VerificationService {
     const [event] = await db.select().from(reputationEvents)
       .where(and(eq(reputationEvents.submissionId, submissionId), eq(reputationEvents.eventType, VERIFIED_EVENT))).limit(1);
     const [reward] = await db.select().from(rewards).where(eq(rewards.submissionId, submissionId)).limit(1);
+    const [org] = await db.select({ name: organizations.name, walletAddress: organizations.walletAddress }).from(organizations)
+      .where(eq(organizations.id, row.challenge.organizationId)).limit(1);
     const meta = (event?.metadata ?? {}) as Record<string, unknown>;
     const verified = row.submission.status === "verified";
     return {
@@ -135,7 +137,8 @@ export class VerificationService {
       mstPending: reward && reward.status !== "confirmed" ? reward.amount : 0,
       mstRewardStatus: reward ? REWARD_STATUS_LABEL[reward.status] : verified && row.challenge.mstReward > 0 ? "WalletRequired" : null,
       reward: reward ? {
-        id: reward.id, mstAmount: reward.amount, token: reward.token, network: reward.network, walletAddress: reward.walletAddress,
+        id: reward.id, mstAmount: reward.amount, payment: org?.walletAddress ? "organization" : "claim", organizationName: org?.name,
+        funderAddress: reward.funderAddress ?? undefined, token: reward.token, network: reward.network, walletAddress: reward.walletAddress,
         status: REWARD_STATUS_LABEL[reward.status], transactionHash: reward.transactionHash ?? undefined,
         explorerUrl: explorerTxUrl(this.deps.config.mst.explorerUrl, reward.transactionHash) ?? undefined,
       } : null,

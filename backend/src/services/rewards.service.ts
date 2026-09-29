@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { formatEther, parseEther } from "ethers";
 import { z } from "zod";
-import { challenges, rewards, submissions } from "../db/schema.js";
+import { challenges, organizations, rewards, submissions } from "../db/schema.js";
 import { ClaimError, type ClaimInput } from "../integrations/blockchain/claims.js";
 import { explorerTxUrl } from "../integrations/blockchain/mst-provider.js";
 import { BlockchainNotConfiguredError } from "../integrations/blockchain/types.js";
@@ -22,8 +22,12 @@ const toAppError = (e: unknown): AppError =>
 export class RewardsService {
   constructor(private readonly deps: ServiceDeps) {}
 
-  toDto(r: RewardRow, challengeTitle: string) {
+  toDto(r: RewardRow, challengeTitle: string, org?: { name: string; walletAddress: string | null } | null) {
     return {
+      // "organization": the challenge's organization pays from its own wallet; "claim": the solver claims from the vault.
+      payment: org?.walletAddress ? "organization" as const : "claim" as const,
+      organizationName: org?.name,
+      funderAddress: r.funderAddress ?? undefined,
       id: r.id,
       challengeId: r.challengeId,
       challengeTitle,
@@ -42,10 +46,12 @@ export class RewardsService {
   }
 
   async listForUser(userId: string) {
-    const rows = await this.deps.db.select({ reward: rewards, title: challenges.title }).from(rewards)
+    const rows = await this.deps.db.select({ reward: rewards, title: challenges.title, org: { name: organizations.name, walletAddress: organizations.walletAddress } })
+      .from(rewards)
       .innerJoin(challenges, eq(challenges.id, rewards.challengeId))
+      .innerJoin(organizations, eq(organizations.id, challenges.organizationId))
       .where(eq(rewards.userId, userId)).orderBy(desc(rewards.createdAt)).limit(200);
-    return rows.map((r) => this.toDto(r.reward, r.title));
+    return rows.map((r) => this.toDto(r.reward, r.title, r.org));
   }
 
   /** Loads a reward owned by `userId` together with what the on-chain claim needs. Others get 404. */
@@ -58,6 +64,9 @@ export class RewardsService {
     if (!row) throw notFound("Reward");
     const { reward, challenge, submission } = row;
     if (reward.status === "confirmed") throw conflict("REWARD_ALREADY_PAID", "This reward has already been paid");
+    const [org] = await this.deps.db.select({ walletAddress: organizations.walletAddress }).from(organizations)
+      .where(eq(organizations.id, challenge.organizationId)).limit(1);
+    if (org?.walletAddress) throw conflict("PAID_BY_ORGANIZATION", "This reward is paid directly by the challenge organization's wallet");
     if (reward.status === "submitted" && reward.transactionHash) throw conflict("REWARD_IN_FLIGHT", "This reward is already being processed");
     return {
       reward,

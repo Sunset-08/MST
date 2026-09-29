@@ -10,7 +10,7 @@ import { loadConfig, type AppConfig } from "../config/env.js";
 import type { Db } from "../db/index.js";
 import * as schema from "../db/schema.js";
 import { ClaimError, type ClaimInput, type ClaimPreparation, type ClaimResult, type RewardClaimProvider } from "../integrations/blockchain/claims.js";
-import type { BlockchainRewardProvider, ProviderStatus, RewardInput, TransactionStatus } from "../integrations/blockchain/types.js";
+import type { BlockchainRewardProvider, NativeTransfer, ProviderStatus, RewardInput, TransactionStatus } from "../integrations/blockchain/types.js";
 import { BlockchainNotConfiguredError } from "../integrations/blockchain/types.js";
 import type { GitHubAppClient, GitHubInstallation, GitHubIssueData, GitHubPullRequestData, GitHubRepositoryData } from "../integrations/github/types.js";
 import { AppError } from "../utils/http.js";
@@ -120,7 +120,8 @@ export class FakeClaims implements RewardClaimProvider {
     if (this.failWith) throw this.failWith;
     this.completed.push(input);
     return {
-      onchainSubmissionId: `0x${"33".repeat(32)}`, verificationTx: `0x${"44".repeat(32)}`, rewardTx: `0x${"55".repeat(32)}`, rewardBlock: 7,
+      // Every real payout has its own transaction hash (rewards.transaction_hash is unique).
+      onchainSubmissionId: `0x${"33".repeat(32)}`, verificationTx: `0x${"44".repeat(32)}`, rewardTx: `0x55${String(this.completed.length).padStart(62, "0")}`, rewardBlock: 7,
       contractAddress: "0x0000000000000000000000000000000000000002", amountWei: String(input.amount * 1e15), recipient: input.recipientAddress,
     };
   }
@@ -141,6 +142,9 @@ export class FakeChain implements BlockchainRewardProvider {
     return { transactionHash: `0x${String(this.sent.length).padStart(64, "0")}` };
   }
   async getTransactionStatus(hash: string) { return this.txStatus.get(hash) ?? "pending"; }
+  /** Mined native transfers by hash (tests register what "the chain" reports). */
+  transfers = new Map<string, NativeTransfer>();
+  async getNativeTransfer(hash: string) { return this.transfers.get(hash) ?? null; }
 }
 
 export interface TestContext {

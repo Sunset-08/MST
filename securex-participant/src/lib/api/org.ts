@@ -169,3 +169,22 @@ export const updateGithubRepo = (id: string, patch: { isActive?: boolean; defaul
 export const removeGithubRepo = (id: string) => apiDelete<{ removed: boolean }>(`/org/github/repositories/${id}`, { org: true });
 export const listOrgGithubIssues = (params: { repositoryId?: string; state?: string; search?: string; limit?: number } = {}) =>
   apiGet<PaginatedResponse<OrgGithubIssue>>(`/org/github/issues${toQuery(params)}`, { org: true });
+
+// ---- organization funding wallet + reward payouts (maintainer wallet → solver wallet) ----
+export interface OrgFundingWallet { address: string | null; verifiedAt: string | null; chainId: number | null; network: string | null; explorerUrl: string | null }
+export interface OrgRewardRow {
+  id: string; challengeId: string; challengeTitle: string; submissionId: string;
+  solver: { username: string; displayName: string };
+  recipientAddress: string; mstAmount: number; amountWei: string;
+  status: 'Pending' | 'Processing' | 'Confirmed' | 'Failed';
+  transactionHash?: string; funderAddress?: string; explorerUrl?: string; createdAt: string; paidAt: string | null;
+}
+export const getOrgWallet = () => apiGet<OrgFundingWallet>('/org/wallet', { org: true });
+export const requestOrgWalletChallenge = (address: string) =>
+  apiPost<{ message: string; challengeToken: string; expiresAt: string }>('/org/wallet/challenge', { address }, { org: true });
+export const verifyOrgWallet = (input: { address: string; signature: string; challengeToken: string }) =>
+  apiPost<OrgFundingWallet>('/org/wallet/verify', input, { org: true });
+export const unlinkOrgWallet = () => apiDelete<OrgFundingWallet>('/org/wallet', { org: true });
+export const listOrgRewards = () => apiGet<{ wallet: OrgFundingWallet; rewards: OrgRewardRow[] }>('/org/rewards', { org: true });
+export const confirmOrgRewardPayment = (id: string, txHash: string) =>
+  apiPost<{ reward: OrgRewardRow; blockNumber: number }>(`/org/rewards/${encodeURIComponent(id)}/pay`, { txHash }, { org: true });

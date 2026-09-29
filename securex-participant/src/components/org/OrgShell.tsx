@@ -22,6 +22,7 @@ import {
   X,
   ShieldCheck,
   Bell,
+  Coins,
 } from 'lucide-react';
 import { useOrg } from '@/lib/context/OrgContext';
 
@@ -30,6 +31,7 @@ const ORG_NAV = [
   { href: '/org/challenges/create', label: 'Create Challenge', icon: PlusCircle },
   { href: '/org/challenges', label: 'My Challenges', icon: ListChecks },
   { href: '/org/submissions', label: 'Submissions', icon: ClipboardCheck },
+  { href: '/org/rewards', label: 'Rewards', icon: Coins },
   { href: '/org/settings', label: 'Settings', icon: Settings },
 ];
 

@@ -6,6 +6,7 @@ import {
   type ProviderStatus,
   type RewardInput,
   type RewardTransaction,
+  type NativeTransfer,
   type TransactionStatus,
 } from "./types.js";
 
@@ -75,6 +76,18 @@ export class MstRewardProvider implements BlockchainRewardProvider {
       return tx ? "pending" : "not_found";
     }
     return receipt.status === 1 ? "confirmed" : "failed";
+  }
+
+  async getNativeTransfer(txHash: string): Promise<NativeTransfer | null> {
+    if (!TX_HASH.test(txHash)) return null;
+    const rpc = await this.assertChain();
+    const [tx, receipt] = await Promise.all([rpc.getTransaction(txHash), rpc.getTransactionReceipt(txHash)]);
+    if (!tx || !receipt) return null;
+    const block = await rpc.getBlock(receipt.blockNumber);
+    return {
+      hash: receipt.hash, from: tx.from, to: tx.to, valueWei: tx.value, success: receipt.status === 1,
+      blockNumber: receipt.blockNumber, blockTimestamp: block?.timestamp ?? 0, chainId: Number(tx.chainId),
+    };
   }
 
   private async assertChain(): Promise<JsonRpcProvider> {

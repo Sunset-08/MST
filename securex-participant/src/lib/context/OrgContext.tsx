@@ -9,7 +9,7 @@
 // ============================================================
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import type { ChallengeDraft, ChallengeQuestion, OrgAdmin, Organization, OrgChallengeType, OrgWallet } from '@/lib/types/org';
+import type { ChallengeDraft, ChallengeQuestion, OrgAdmin, Organization, OrgChallengeType } from '@/lib/types/org';
 import { createEmptyDraft } from '@/lib/types/org';
 import { errorMessage, setActiveOrganization } from '@/lib/api/client';
 import { createOrgChallenge, getOrgChallenge, getOrganization, updateOrgChallenge, type OrgChallengeRow } from '@/lib/api/org';
@@ -20,7 +20,6 @@ const ORG_KEY = 'sx_org_id';
 interface OrgContextValue {
   admin: OrgAdmin | null;
   organization: Organization | null;
-  wallet: OrgWallet | null;
   isReady: boolean;
   isLoading: boolean;
   isLoggedIn: boolean;
@@ -30,8 +29,6 @@ interface OrgContextValue {
   login: (email: string, password: string) => Promise<{ hasOrganization: boolean }>;
   logout: () => Promise<void>;
   refreshOrganization: () => Promise<void>;
-  connectWallet: (walletAddress: string) => Promise<void>;
-  disconnectWallet: () => void;
 
   draft: ChallengeDraft;
   updateDraft: (patch: Partial<ChallengeDraft>) => void;
@@ -139,7 +136,6 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
   const auth = useAuth();
   const [orgId, setOrgId] = useState<string | null>(null);
   const [organization, setOrganization] = useState<Organization | null>(null);
-  const [wallet, setWallet] = useState<OrgWallet | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [draft, setDraft] = useState<ChallengeDraft>(createEmptyDraft());
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -156,17 +152,6 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
     if (id) window.localStorage.setItem(ORG_KEY, id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth.me?.id, memberships.length]);
-
-  const connectWallet = useCallback(async (walletAddress: string) => {
-    setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
-    setWallet({ address: walletAddress, isConnected: true, network: 'Testnet' });
-    setIsLoading(false);
-  }, []);
-
-  const disconnectWallet = useCallback(() => {
-    setWallet(null);
-  }, []);
 
   const refreshOrganization = useCallback(async () => {
     if (!orgId) {
@@ -261,15 +246,12 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
       value={{
         admin,
         organization,
-        wallet,
         isReady: auth.isReady,
         isLoading,
         isLoggedIn: auth.status === 'authenticated' && memberships.length > 0,
         needsOrganization: auth.status === 'authenticated' && auth.me !== null && memberships.length === 0,
         login,
         logout,
-        connectWallet,
-        disconnectWallet,
         refreshOrganization,
         draft,
         updateDraft,

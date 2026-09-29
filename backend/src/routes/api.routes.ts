@@ -78,6 +78,12 @@ export function createOrgDashboardRouter({ services, authenticate, limiters }: R
   r.put("/challenges/:id", admin, c.updateChallenge);
   r.get("/submissions", admin, c.listSubmissions);
   r.post("/submissions/:id/review", admin, c.reviewSubmission);
+  r.get("/wallet", c.orgWallet);
+  r.post("/wallet/challenge", admin, limiters.write, c.orgWalletChallenge);
+  r.post("/wallet/verify", admin, limiters.write, c.orgWalletVerify);
+  r.delete("/wallet", admin, c.orgWalletUnlink);
+  r.get("/rewards", admin, c.orgRewards);
+  r.post("/rewards/:id/pay", admin, limiters.write, c.orgRewardPay);
   r.get("/github", c.githubOverview);
   r.get("/github/install-url", admin, c.githubInstallUrl);
   r.post("/github/installations", admin, limiters.write, c.githubLink);

@@ -244,6 +244,13 @@ export const organizations = pgTable("organizations", {
     .notNull()
     .default("active"),
 
+  /** Wallet that funds this organization's MSTC rewards; linked through the browser extension with a signature. */
+  walletAddress: text("wallet_address"),
+
+  walletVerifiedAt: timestamp("wallet_verified_at", {
+    withTimezone: true,
+  }),
+
   createdAt: timestamp("created_at", {
     withTimezone: true,
   })
@@ -1019,6 +1026,9 @@ export const rewards = pgTable("rewards", {
 
   contractAddress: text("contract_address"),
 
+  /** Wallet that actually sent the payout on-chain (the organization wallet, or the vault for vault claims). */
+  funderAddress: text("funder_address"),
+
   createdAt: timestamp("created_at", {
     withTimezone: true,
   })
@@ -1032,5 +1042,7 @@ export const rewards = pgTable("rewards", {
   (table) => [
     // At most one MST reward per verified submission.
     unique("reward_submission_unique").on(table.submissionId),
+    // One on-chain transaction can pay only one reward.
+    unique("reward_transaction_unique").on(table.transactionHash),
   ],
 );
