@@ -7,7 +7,10 @@
 
 import { clearSession, getSession, setSession, type StoredSession } from '@/lib/auth/session';
 
-export const BASE_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api').replace(/\/$/, '');
+// The backend mounts every route under /api (e.g. /api/auth/login). Accept either the
+// bare origin (https://mst-2krf.onrender.com) or a URL that already ends in /api.
+const RAW_BASE_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api').replace(/\/+$/, '');
+export const BASE_URL = RAW_BASE_URL.endsWith('/api') ? RAW_BASE_URL : `${RAW_BASE_URL}/api`;
 
 export class ApiError extends Error {
   constructor(
