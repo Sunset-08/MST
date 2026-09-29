@@ -169,6 +169,13 @@ export async function register(input: ProfileInput & { password: string }) {
   return { user: user ? toPublicUser(user) : null, session, emailConfirmationRequired: !session };
 }
 
+/** A rejected project key/URL (as opposed to bad user credentials) must not be reported as a wrong password. */
+function isSupabaseConfigError(error: { status?: number; code?: string; message?: string }): boolean {
+  if (error.code === "invalid_api_key" || error.code === "no_authorization") return true;
+  if (/invalid api key|no api key|apikey/i.test(error.message ?? "")) return true;
+  return error.status === 401 || error.status === 403 || (error.status !== undefined && error.status >= 500);
+}
+
 export async function login(input: { email: string; password: string }) {
   let data, error;
   try {
@@ -182,6 +189,9 @@ export async function login(input: { email: string; password: string }) {
   if (error) {
     if (error.status === 0 || error.name === 'AuthRetryableFetchError') {
       throw new AuthServiceError("AUTH_NETWORK_ERROR", "Unable to connect to the authentication server. Please try again.", 502);
+    }
+    if (isSupabaseConfigError(error)) {
+      throw new AuthServiceError("AUTH_CONFIG_ERROR", "Authentication service is misconfigured or unavailable", 502);
     }
     throw new AuthServiceError("AUTH_INVALID_CREDENTIALS", "Invalid email or password", 401);
   }
