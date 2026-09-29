@@ -136,30 +136,80 @@ function sessionFrom(session: {
 }
 
 export async function register(input: ProfileInput & { password: string }) {
-  const { data, error } = await getSupabaseClient().auth.signUp({
-    email: input.email,
-    password: input.password,
-    options: { data: { username: input.username, display_name: input.displayName } },
-  });
-  if (error) throw new AuthServiceError("AUTH_REGISTRATION_FAILED", "Unable to register with these details", 400);
+  let data, error;
+  try {
+    const res = await getSupabaseClient().auth.signUp({
+      email: input.email,
+      password: input.password,
+      options: { data: { username: input.username, display_name: input.displayName } },
+    });
+    data = res.data;
+    error = res.error;
+  } catch (err) {
+    throw new AuthServiceError("AUTH_CONFIG_ERROR", "Authentication service is misconfigured or unavailable", 502);
+  }
+
+  if (error) {
+    if (error.status === 0 || error.name === 'AuthRetryableFetchError') {
+      throw new AuthServiceError("AUTH_NETWORK_ERROR", "Unable to connect to the authentication server. Please try again.", 502);
+    }
+    throw new AuthServiceError("AUTH_REGISTRATION_FAILED", error.message || "Unable to register with these details", 400);
+  }
 
   const session = sessionFrom(data.session);
-  const user = session && data.user ? await synchronizeAuthUser(data.user, input) : null;
+  let user = null;
+  if (session && data?.user) {
+    try {
+      user = await synchronizeAuthUser(data.user, input);
+    } catch (err) {
+      if (err instanceof AuthServiceError) throw err;
+      throw new AuthServiceError("AUTH_DATABASE_ERROR", "Unable to synchronize profile with the database. Please check configuration.", 502);
+    }
+  }
   return { user: user ? toPublicUser(user) : null, session, emailConfirmationRequired: !session };
 }
 
 export async function login(input: { email: string; password: string }) {
-  const { data, error } = await getSupabaseClient().auth.signInWithPassword(input);
-  if (error || !data.user || !data.session) {
+  let data, error;
+  try {
+    const res = await getSupabaseClient().auth.signInWithPassword(input);
+    data = res.data;
+    error = res.error;
+  } catch (err) {
+    throw new AuthServiceError("AUTH_CONFIG_ERROR", "Authentication service is misconfigured or unavailable", 502);
+  }
+
+  if (error) {
+    if (error.status === 0 || error.name === 'AuthRetryableFetchError') {
+      throw new AuthServiceError("AUTH_NETWORK_ERROR", "Unable to connect to the authentication server. Please try again.", 502);
+    }
     throw new AuthServiceError("AUTH_INVALID_CREDENTIALS", "Invalid email or password", 401);
   }
-  const user = await synchronizeAuthUser(data.user);
+
+  if (!data?.user || !data?.session) {
+    throw new AuthServiceError("AUTH_INVALID_CREDENTIALS", "Invalid email or password", 401);
+  }
+  let user;
+  try {
+    user = await synchronizeAuthUser(data.user);
+  } catch (err) {
+    if (err instanceof AuthServiceError) throw err;
+    throw new AuthServiceError("AUTH_DATABASE_ERROR", "Unable to synchronize profile with the database. Please check configuration.", 502);
+  }
   return { user: toPublicUser(user), session: sessionFrom(data.session)! };
 }
 
 export async function verifyAccessToken(accessToken: string): Promise<SupabaseUser> {
-  const { data, error } = await getSupabaseClient().auth.getUser(accessToken);
-  if (error || !data.user) {
+  let data, error;
+  try {
+    const res = await getSupabaseClient().auth.getUser(accessToken);
+    data = res.data;
+    error = res.error;
+  } catch (err) {
+    throw new AuthServiceError("AUTH_CONFIG_ERROR", "Authentication service is misconfigured or unavailable", 502);
+  }
+
+  if (error || !data?.user) {
     throw new AuthServiceError("AUTH_INVALID_TOKEN", "Invalid or expired access token", 401);
   }
   return data.user;
@@ -167,13 +217,19 @@ export async function verifyAccessToken(accessToken: string): Promise<SupabaseUs
 
 /** Revokes the authenticated Supabase session using GoTrue's logout endpoint. */
 export async function logout(accessToken: string): Promise<void> {
-  const response = await fetch(`${getSupabaseUrl().replace(/\/$/, "")}/auth/v1/logout?scope=local`, {
-    method: "POST",
-    headers: {
-      apikey: getSupabaseAnonKey(),
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
+  let response;
+  try {
+    response = await fetch(`${getSupabaseUrl().replace(/\/$/, "")}/auth/v1/logout?scope=local`, {
+      method: "POST",
+      headers: {
+        apikey: getSupabaseAnonKey(),
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+  } catch (err) {
+    throw new AuthServiceError("AUTH_CONFIG_ERROR", "Authentication service is misconfigured or unavailable", 502);
+  }
+
   if (!response.ok) {
     throw new AuthServiceError("AUTH_LOGOUT_FAILED", "Unable to end the Supabase session", 502);
   }
