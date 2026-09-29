@@ -10,6 +10,7 @@
  *   SEED_ADMIN_PASSWORD, SEED_PARTICIPANT_PASSWORD, SEED_ORG_PASSWORD   generated when unset
  *   SEED_ORG_NAME                                                 default "SECUREX Demo Security"
  *   GITHUB_INSTALLATION_ID                                        link + sync this installation for the org
+ *   SEED_ONLY=admin                                               create/promote just the administrator (no participant, no org)
  */
 import "dotenv/config";
 import { randomBytes } from "node:crypto";
@@ -88,7 +89,9 @@ async function ensureAccount(a: Account) {
 async function main() {
   const settings = await supabaseSettings();
   if (settings.disable_signup) fail("Sign-ups are disabled in Supabase (Authentication → Sign In / Providers).");
-  const accounts = loadAccounts(Boolean(settings.mailer_autoconfirm));
+  const onlyAdmin = process.env.SEED_ONLY?.trim() === "admin";
+  const everyAccount = loadAccounts(Boolean(settings.mailer_autoconfirm));
+  const accounts = onlyAdmin ? everyAccount.filter((a) => a.kind === "admin") : everyAccount;
 
   console.log(`Supabase email confirmation: ${settings.mailer_autoconfirm ? "off (accounts are usable immediately)" : "ON"}`);
   const profiles = new Map<Kind, { id: string }>();
@@ -100,12 +103,21 @@ async function main() {
       console.log(`  ✔ ${a.kind}: ${a.email} (signed up${row ? "" : ", profile pending"})`);
     }
   }
-  writeFileSync(CREDENTIALS_FILE, JSON.stringify(accounts, null, 2) + "\n", { mode: 0o600 });
+  const kept = onlyAdmin && existsSync(CREDENTIALS_FILE)
+    ? (JSON.parse(readFileSync(CREDENTIALS_FILE, "utf8")) as Account[]).filter((a) => a.kind !== "admin")
+    : [];
+  writeFileSync(CREDENTIALS_FILE, JSON.stringify([...kept, ...accounts], null, 2) + "\n", { mode: 0o600 });
   chmodSync(CREDENTIALS_FILE, 0o600);
 
   const admin = profiles.get("admin");
   const orgOwner = profiles.get("org");
-  if (admin && orgOwner) {
+  if (onlyAdmin) {
+    if (!admin) console.log("  ! Admin not promoted: the account cannot sign in yet (confirm its email, then run the seed again).");
+    else {
+      await db.update(users).set({ role: "platform_admin", updatedAt: new Date() }).where(eq(users.id, admin.id));
+      console.log("  ✔ admin role granted");
+    }
+  } else if (admin && orgOwner) {
     const config = loadConfig();
     const github = new OctokitGitHubAppClient(config.github);
     const { services } = createApp({
