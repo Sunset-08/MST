@@ -1,4 +1,4 @@
-# dev masti
+# DevArena
 
 Gamified web3 security platform: organizations publish security challenges from real GitHub issues, participants solve
 them, verified solutions earn Points (off-chain) and MST testnet rewards (on-chain).
