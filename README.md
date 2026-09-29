@@ -2,7 +2,7 @@
 
 Gamified web3 security platform: organizations publish security challenges from real GitHub issues, participants solve
 them, verified solutions earn Points (off-chain) and MST testnet rewards (on-chain).
-
+hello world
 | Folder | What it is |
 |---|---|
 | `backend/` | Express + TypeScript API (Supabase Auth + Postgres via Drizzle, GitHub App, verification, gamification, reward claims) |
