@@ -175,7 +175,7 @@ export default function OrgSettingsPage() {
           ) : github.installations.length === 0 ? (
             <div className="space-y-3">
               <p className="text-sm text-slate-400">
-                Install the securexMST GitHub App on your GitHub account or organization to import repositories and issues.
+                Install the DevArena GitHub App on your GitHub account or organization to import repositories and issues.
                 The app only needs read access to issues and repository metadata.
               </p>
               {!github.configured && <p className="text-xs text-amber-400">The GitHub App is not configured on this server yet.</p>}

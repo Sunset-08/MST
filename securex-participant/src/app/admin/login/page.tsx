@@ -51,7 +51,7 @@ export default function AdminLoginPage() {
             <Crown size={30} className="text-amber-400" />
           </div>
           <h1 className="text-4xl font-black text-white mb-1">
-            SECURE<span className="text-amber-400">X</span>
+            Dev<span className="text-amber-400">Arena</span>
           </h1>
           <p className="text-slate-500 text-sm">Platform Administration</p>
         </div>

@@ -92,7 +92,7 @@ export interface ChallengeDraft {
   // GitHub
   /** Full name (owner/repo) of a repository synchronized through the GitHub App. */
   githubRepository: string;
-  /** SECUREX id of the synchronized repository / issue (set by the pickers). */
+  /** DevArena id of the synchronized repository / issue (set by the pickers). */
   githubRepositoryId: string;
   githubIssueId: string;
   /** Legacy free-text reference; kept for display only. */

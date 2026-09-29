@@ -8,7 +8,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { GitBranch, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/context/AuthContext';
 import { errorMessage } from '@/lib/api/client';
@@ -40,12 +40,7 @@ export default function LoginPage() {
     }
   }
 
-  async function handleGitHubLogin() {
-    setLoading(true);
-    // TODO: Member 3 — signIn('github') from next-auth/react
-    await new Promise((r) => setTimeout(r, 500));
-    router.push('/dashboard');
-  }
+
   return (
     <div className="min-h-screen flex overflow-hidden relative">
       {/* ── Full-screen cyberpunk background ── */}
@@ -345,13 +340,29 @@ export default function LoginPage() {
               </button>
             </form>
 
-            {/* Divider */}
-            <div className="flex items-center gap-3">
-              <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
-              <span className="text-xs text-slate-600 uppercase tracking-widest">OR CONTINUE WITH</span>
-              <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
-            </div>
 
+            {/* Sign up link */}
+            <p className="text-center text-sm text-slate-500">
+              Don&apos;t have an account?{' '}
+              <Link
+                href="/auth/signup"
+                id="signup-link"
+                className="font-semibold transition-colors"
+                style={{ color: '#00d4ff' }}
+              >
+                Sign up
+              </Link>
+            </p>
+
+            {/* Portal back */}
+            <div className="text-center">
+              <Link
+                href="/"
+                className="text-xs text-slate-600 hover:text-slate-400 transition-colors"
+              >
+                ← Back to Portal Selection
+              </Link>
+            </div>
 
           </div>
         </div>

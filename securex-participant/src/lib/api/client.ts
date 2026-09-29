@@ -58,7 +58,7 @@ async function rawFetch<T>(method: string, path: string, opts: RequestOptions, t
       signal: opts.signal,
     });
   } catch {
-    throw new ApiError(0, 'NETWORK_ERROR', 'Cannot reach the SECUREX API. Is the backend running?');
+    throw new ApiError(0, 'NETWORK_ERROR', 'Cannot reach the DevArena API. Is the backend running?');
   }
   let json: Envelope<T> | null = null;
   try {

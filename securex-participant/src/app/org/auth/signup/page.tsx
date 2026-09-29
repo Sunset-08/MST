@@ -50,7 +50,7 @@ export default function OrgSignupPage() {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-violet-500/15 border border-violet-500/25 mb-4">
             <Building2 size={26} className="text-violet-400" />
           </div>
-          <h1 className="text-3xl font-black text-white">SECURE<span className="text-violet-400">X</span> for Organizations</h1>
+          <h1 className="text-3xl font-black text-white">Dev<span className="text-violet-400">Arena</span> for Organizations</h1>
           <p className="text-slate-500 text-sm mt-1">Create your organization account</p>
         </div>
 

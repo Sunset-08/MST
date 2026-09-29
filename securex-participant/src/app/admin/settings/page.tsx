@@ -41,7 +41,7 @@ export default function AdminSettingsPage() {
     },
     {
       icon: GitBranch, color: '#10b981', title: 'GitHub',
-      description: 'securexMST GitHub App and participant connection.',
+      description: 'DevArena GitHub App and participant connection.',
       items: [
         { label: 'GitHub App', value: `${yes(s.github.appConfigured)}${s.github.appName ? ` (${s.github.appName})` : ''}` },
         { label: 'Webhook secret', value: yes(s.github.webhookSecretConfigured) },
