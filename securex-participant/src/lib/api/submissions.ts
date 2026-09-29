@@ -2,43 +2,42 @@
 // SECUREX — Submission API Service
 // ============================================================
 
-import type { Submission, VerificationResult } from '@/lib/types';
-import { USE_MOCK, apiPost } from './client';
+import type { VerificationResult } from '@/lib/types';
+import { apiGet, apiPost } from './client';
 
-export async function submitAttempt(
-  attemptId: string,
-  submission: Omit<Submission, 'id' | 'attemptId' | 'submittedAt'>,
-): Promise<VerificationResult> {
-  if (USE_MOCK) {
-    // Simulate a pending verification (backend will verify asynchronously)
-    await new Promise((r) => setTimeout(r, 1500));
-    return {
-      submissionId: `sub-${Date.now()}`,
-      challengeId: submission.challengeId,
-      status: 'Pending',
-      pointsAwarded: 0,
-      reputationAwarded: 0,
-      mstAwarded: 0,
-      streakUpdated: false,
-    };
-  }
-  return apiPost(`/attempts/${attemptId}/submit`, submission);
+/** Free-form submission fields; empty values are dropped so optional fields validate server-side. */
+export type SubmissionPayload = Record<string, string | string[] | Record<string, string> | undefined>;
+
+function clean(payload: SubmissionPayload): SubmissionPayload {
+  return Object.fromEntries(
+    Object.entries(payload).filter(([, v]) => {
+      if (v === undefined) return false;
+      if (typeof v === 'string') return v.trim() !== '';
+      if (Array.isArray(v)) return v.length > 0;
+      return Object.keys(v).length > 0;
+    }),
+  );
 }
 
-export async function getVerificationResult(submissionId: string): Promise<VerificationResult> {
-  if (USE_MOCK) {
-    // Simulate verification completing after a delay
-    await new Promise((r) => setTimeout(r, 2000));
-    return {
-      submissionId,
-      challengeId: 'ch-002',
-      status: 'Verified',
-      pointsAwarded: 250,
-      reputationAwarded: 20,
-      mstAwarded: 5,
-      streakUpdated: true,
-    };
+export const submitAttempt = (attemptId: string, payload: SubmissionPayload) =>
+  apiPost<VerificationResult>(`/attempts/${encodeURIComponent(attemptId)}/submit`, clean(payload));
+
+export const getVerificationResult = (submissionId: string) =>
+  apiGet<VerificationResult>(`/submissions/${encodeURIComponent(submissionId)}/result`);
+
+/** Polls until verification leaves Pending or `timeoutMs` elapses (manual reviews stay Pending). */
+export async function waitForVerification(
+  submissionId: string,
+  onUpdate?: (r: VerificationResult) => void,
+  timeoutMs = 20_000,
+): Promise<VerificationResult> {
+  const started = Date.now();
+  let result = await getVerificationResult(submissionId);
+  onUpdate?.(result);
+  while (result.status === 'Pending' && Date.now() - started < timeoutMs) {
+    await new Promise((r) => setTimeout(r, 1500));
+    result = await getVerificationResult(submissionId);
+    onUpdate?.(result);
   }
-  const { apiGet } = await import('./client');
-  return apiGet(`/submissions/${submissionId}/result`);
+  return result;
 }

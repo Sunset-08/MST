@@ -10,6 +10,8 @@ import { OrgShell } from '@/components/org/OrgShell';
 import { OrgWalletCard } from '@/components/org/OrgWalletCard';
 import { useOrg } from '@/lib/context/OrgContext';
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import { getOrgStats, listOrgChallenges, type OrgChallengeRow, type OrgStats } from '@/lib/api/org';
 import {
   PlusCircle,
   ListChecks,
@@ -23,32 +25,6 @@ import {
   CheckCircle2,
   Wallet,
 } from 'lucide-react';
-
-// Mock challenges for the org dashboard
-const MOCK_ORG_CHALLENGES = [
-  {
-    id: 'och-001',
-    title: 'SQL Injection in Auth Module',
-    category: 'Authentication',
-    difficulty: 'hard',
-    status: 'published',
-    attempts: 12,
-    mstReward: 50,
-    pointsReward: 500,
-    createdAt: '2026-09-20T10:00:00Z',
-  },
-  {
-    id: 'och-002',
-    title: 'XSS in Dashboard Input',
-    category: 'Web Security',
-    difficulty: 'medium',
-    status: 'draft',
-    attempts: 0,
-    mstReward: 25,
-    pointsReward: 250,
-    createdAt: '2026-09-25T10:00:00Z',
-  },
-];
 
 const DIFFICULTY_STYLE: Record<string, { color: string; bg: string }> = {
   easy: { color: '#34d399', bg: 'rgba(52, 211, 153, 0.1)' },
@@ -87,13 +63,20 @@ function OrgStatCard({
 }
 
 export default function OrgDashboardPage() {
-  const { organization, admin, wallet } = useOrg();
+  const { organization, admin } = useOrg();
+  const [stats, setStats] = useState<OrgStats | null>(null);
+  const [challenges, setChallenges] = useState<OrgChallengeRow[]>([]);
+
+  useEffect(() => {
+    if (!organization) return;
+    getOrgStats().then(setStats).catch(() => setStats(null));
+    listOrgChallenges({ limit: 5 }).then((r) => setChallenges(r.data)).catch(() => setChallenges([]));
+  }, [organization]);
 
   if (!organization || !admin) return null;
 
-  const publishedCount = MOCK_ORG_CHALLENGES.filter((c) => c.status === 'published').length;
-  const draftCount = MOCK_ORG_CHALLENGES.filter((c) => c.status === 'draft').length;
-  const totalAttempts = MOCK_ORG_CHALLENGES.reduce((s, c) => s + c.attempts, 0);
+  const publishedCount = stats?.activeChallenges ?? 0;
+  const draftCount = stats?.draftChallenges ?? 0;
 
   return (
     <OrgShell>
@@ -148,10 +131,16 @@ export default function OrgDashboardPage() {
             color="#60a5fa"
           />
           <OrgStatCard
-            label="Total Attempts"
-            value={totalAttempts}
+            label="Submissions"
+            value={stats?.totalSubmissions ?? 0}
             icon={<Users size={16} />}
             color="#a78bfa"
+          />
+          <OrgStatCard
+            label="MST Distributed"
+            value={`${stats?.mstDistributed ?? 0} MSTC`}
+            icon={<TrendingUp size={16} />}
+            color="#f59e0b"
           />
         </div>
 
@@ -173,7 +162,7 @@ export default function OrgDashboardPage() {
               </Link>
             </div>
 
-            {MOCK_ORG_CHALLENGES.length === 0 ? (
+            {challenges.length === 0 ? (
               <div
                 className="sx-card p-10 text-center"
                 style={{ border: '1px dashed rgba(139, 92, 246, 0.2)' }}
@@ -186,8 +175,8 @@ export default function OrgDashboardPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {MOCK_ORG_CHALLENGES.map((ch) => {
-                  const diffStyle = DIFFICULTY_STYLE[ch.difficulty] ?? DIFFICULTY_STYLE.easy;
+                {challenges.map((ch) => {
+                  const diffStyle = DIFFICULTY_STYLE[ch.difficulty.toLowerCase()] ?? DIFFICULTY_STYLE.easy;
                   return (
                     <div key={ch.id} className="sx-card sx-card-interactive p-5">
                       <div className="flex items-start justify-between gap-3">
@@ -216,7 +205,7 @@ export default function OrgDashboardPage() {
                           <p className="text-xs text-slate-500 mt-0.5">{ch.category}</p>
                         </div>
                         <div className="text-right flex-shrink-0">
-                          <p className="text-xs text-slate-500">{ch.attempts} attempts</p>
+                          <p className="text-xs text-slate-500">{ch.submissions ?? 0} submissions</p>
                           <p className="text-sm font-bold text-amber-400">{ch.mstReward} MSTC</p>
                         </div>
                       </div>

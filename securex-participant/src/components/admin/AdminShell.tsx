@@ -44,20 +44,24 @@ const ADMIN_NAV = [
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { admin, isLoggedIn, logout } = useAdmin();
+  const { admin, isLoggedIn, isReady, logout } = useAdmin();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Guard: redirect to admin login if not authenticated
   useEffect(() => {
-    if (!isLoggedIn) {
-      router.push('/admin/login');
-    }
-  }, [isLoggedIn, router]);
+    if (isReady && !isLoggedIn) router.replace('/admin/login');
+  }, [isReady, isLoggedIn, router]);
 
-  if (!isLoggedIn || !admin) return null;
+  if (!isReady || !isLoggedIn || !admin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
-  function handleLogout() {
-    logout();
+  async function handleLogout() {
+    await logout();
     router.push('/admin/login');
   }
 

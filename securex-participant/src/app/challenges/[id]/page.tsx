@@ -7,6 +7,7 @@
 import { use, useEffect, useState } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
 import { getChallengeById, startChallenge } from '@/lib/api/challenges';
+import { errorMessage } from '@/lib/api/client';
 import type { Challenge } from '@/lib/types';
 import { DIFFICULTY_BG, CATEGORY_COLORS, cn, formatPoints } from '@/lib/utils';
 import Link from 'next/link';
@@ -26,21 +27,25 @@ export default function ChallengeDetailPage({
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [starting, setStarting] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [startError, setStartError] = useState('');
 
   useEffect(() => {
     getChallengeById(id)
       .then(setChallenge)
-      .catch(console.error)
+      .catch((err) => setLoadError(errorMessage(err, 'Challenge not found')))
       .finally(() => setIsLoading(false));
   }, [id]);
 
   async function handleStart() {
     if (!challenge) return;
     setStarting(true);
+    setStartError('');
     try {
       await startChallenge(challenge.id);
       router.push(`/challenges/${challenge.id}/workspace`);
-    } catch {
+    } catch (err) {
+      setStartError(errorMessage(err, 'Could not start the challenge'));
       setStarting(false);
     }
   }
@@ -61,7 +66,7 @@ export default function ChallengeDetailPage({
     return (
       <AppShell>
         <div className="text-center py-20">
-          <p className="text-slate-400">Challenge not found</p>
+          <p className="text-slate-400">{loadError || 'Challenge not found'}</p>
           <Link href="/challenges" className="sx-btn sx-btn-secondary mt-4 inline-flex">
             Browse Challenges
           </Link>
@@ -147,7 +152,7 @@ export default function ChallengeDetailPage({
                 <div>
                   <p className="text-xs text-slate-600 mb-0.5">GitHub Repository</p>
                   <a
-                    href={`https://github.com/${challenge.githubRepo}`}
+                    href={challenge.githubRepoUrl ?? `https://github.com/${challenge.githubRepo}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1"
@@ -218,6 +223,19 @@ export default function ChallengeDetailPage({
               </p>
             </div>
           </div>
+
+          {(challenge.maxAttempts || challenge.expiresAt) && (
+            <p className="text-xs text-slate-500">
+              {challenge.maxAttempts ? `Up to ${challenge.maxAttempts} attempts. ` : ''}
+              {challenge.expiresAt ? `Closes ${new Date(challenge.expiresAt).toLocaleString()}.` : ''}
+            </p>
+          )}
+
+          {startError && (
+            <div className="bg-rose-400/10 border border-rose-400/20 rounded-xl p-4">
+              <p className="text-sm text-rose-400">{startError}</p>
+            </div>
+          )}
 
           {/* CTA */}
           <button

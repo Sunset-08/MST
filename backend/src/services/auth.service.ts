@@ -199,6 +199,16 @@ export async function login(input: { email: string; password: string }) {
   return { user: toPublicUser(user), session: sessionFrom(data.session)! };
 }
 
+/** Exchanges a Supabase refresh token for a new session (used by the frontend before access tokens expire). */
+export async function refreshSession(refreshToken: string) {
+  const { data, error } = await getSupabaseClient().auth.refreshSession({ refresh_token: refreshToken });
+  if (error || !data.session || !data.user) {
+    throw new AuthServiceError("AUTH_REFRESH_FAILED", "Session expired; sign in again", 401);
+  }
+  const user = await synchronizeAuthUser(data.user);
+  return { user: toPublicUser(user), session: sessionFrom(data.session)! };
+}
+
 export async function verifyAccessToken(accessToken: string): Promise<SupabaseUser> {
   let data, error;
   try {

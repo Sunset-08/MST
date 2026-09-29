@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
 import { getMyRewards } from '@/lib/api/profile';
 import { MSTRewardCard } from '@/components/participant/verification/VerificationResult';
+import { RewardClaim } from '@/components/participant/wallet/RewardClaim';
 import type { Reward } from '@/lib/types';
 import { Coins, CheckCircle, Clock, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -138,18 +139,19 @@ export default function RewardsPage() {
                   transactionHash={reward.transactionHash}
                   status={reward.status}
                 />
+                {(reward.status === 'Pending' || reward.status === 'Failed') && (
+                  <RewardClaim reward={reward} onClaimed={(r) => setRewards((all) => all.map((x) => (x.id === r.id ? r : x)))} />
+                )}
               </div>
             ))}
           </div>
         )}
 
-        {/* Integration note */}
         <div className="sx-card p-4 bg-blue-400/3">
           <p className="text-xs text-slate-500">
-            <strong className="text-blue-400">Integration Note:</strong> On-chain MSTC transfers are processed by the 
-            DevArena smart contract (Member 4). Transaction hashes are provided by the backend after reward confirmation.
-            The frontend displays reward status from{' '}
-            <code className="text-slate-400 font-mono">GET /rewards</code>.
+            Rewards are created when a submission is verified and you have a linked wallet. Claim a <strong className="text-slate-300">Pending</strong> reward
+            with your linked wallet: you sign one proof transaction, the platform verifies it on-chain, and the vault pays you. A reward shows{' '}
+            <strong className="text-slate-300">Confirmed</strong> only after the MST network confirms the payout.
           </p>
         </div>
       </div>

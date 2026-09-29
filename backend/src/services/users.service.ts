@@ -2,13 +2,19 @@ import { and, count, countDistinct, desc, eq, gt, gte, ne, sql } from "drizzle-o
 import { ref } from "../utils/sql.js";
 import { challengeAttempts, challenges, organizationMembers, organizations, reputationEvents, rewards, submissions, users, verifications, wallets } from "../db/schema.js";
 import { iso } from "../utils/dates.js";
-import { notFound } from "../utils/http.js";
+import { z } from "zod";
+import { notFound, parse } from "../utils/http.js";
 import { CHALLENGE_TYPE_LABEL, DIFFICULTY_LABEL, REWARD_STATUS_LABEL } from "../utils/labels.js";
 import { displayedStreak, levelInfo } from "./gamification.rules.js";
 import { VERIFIED_EVENT } from "./gamification.service.js";
 import type { ServiceDeps } from "./deps.js";
 
 type User = typeof users.$inferSelect;
+
+export const updateProfileSchema = z.object({
+  displayName: z.string().trim().min(1).max(80).optional(),
+  bio: z.string().trim().max(500).nullable().optional(),
+}).strict().refine((v) => Object.keys(v).length > 0, "Provide at least one field");
 
 export class UsersService {
   constructor(private readonly deps: ServiceDeps) {}
@@ -17,6 +23,12 @@ export class UsersService {
     const [row] = await this.deps.db.select({ n: count() }).from(users)
       .where(and(eq(users.role, "participant"), gt(users.points, user.points)));
     return Number(row?.n ?? 0) + 1;
+  }
+
+  async updateProfile(userId: string, body: unknown) {
+    const input = parse(updateProfileSchema, body);
+    const [updated] = await this.deps.db.update(users).set({ ...input, updatedAt: this.deps.now() }).where(eq(users.id, userId)).returning();
+    return this.me(updated!);
   }
 
   async solvedCount(userId: string): Promise<number> {
@@ -59,6 +71,7 @@ export class UsersService {
       githubUsername: user.githubUsername ?? undefined,
       github: { username: user.githubUsername, connected: Boolean(user.githubUsername) },
       organizations: memberships,
+      requirements: { githubConnection: this.deps.config.requireGithubConnection },
       createdAt: iso(user.createdAt),
     };
   }

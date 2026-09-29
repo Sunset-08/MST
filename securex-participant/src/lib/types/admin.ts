@@ -34,6 +34,8 @@ export interface AdminDashboardStats {
   pendingReviews: number;
   verifiedSubmissions: number;
   totalMstDistributed: number;
+  /** Share (0-100) of all submissions that were verified. */
+  submissionRate: number;
 
   // Recent activity (last 7 days)
   newUsersThisWeek: number;

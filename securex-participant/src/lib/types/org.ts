@@ -90,7 +90,12 @@ export interface ChallengeDraft {
   description: string;
 
   // GitHub
+  /** Full name (owner/repo) of a repository synchronized through the GitHub App. */
   githubRepository: string;
+  /** SECUREX id of the synchronized repository / issue (set by the pickers). */
+  githubRepositoryId: string;
+  githubIssueId: string;
+  /** Legacy free-text reference; kept for display only. */
   githubIssueRef: string;
 
   // Classification
@@ -159,6 +164,8 @@ export function createEmptyDraft(): ChallengeDraft {
     securityIssue: '',
     description: '',
     githubRepository: '',
+    githubRepositoryId: '',
+    githubIssueId: '',
     githubIssueRef: '',
     securityCategory: '',
     difficulty: '',

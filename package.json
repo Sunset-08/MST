@@ -1,6 +1,11 @@
 {
   "dependencies": {
     "@mstblockchain/mst-sdk": "^1.0.0",
-    "@mstblockchain/mst-vibe-kit": "^0.1.1"
+    "@mstblockchain/mst-vibe-kit": "^0.1.1",
+    "drizzle-orm": "^0.45.3"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.11",
+    "tsx": "^4.23.15"
   }
 }

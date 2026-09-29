@@ -3,8 +3,10 @@ import cors from "cors";
 import type { AppConfig } from "./config/env.js";
 import { createGitHubWebhookHandler } from "./controllers/webhook.controller.js";
 import type { Db } from "./db/index.js";
+import type { RewardClaimProvider } from "./integrations/blockchain/claims.js";
 import type { BlockchainRewardProvider } from "./integrations/blockchain/types.js";
 import type { GitHubAppClient } from "./integrations/github/types.js";
+import type { GitHubUserAuth } from "./integrations/github/user-auth.js";
 import { createErrorHandler, notFoundHandler } from "./middleware/error.js";
 import { createRateLimiters, securityHeaders } from "./middleware/security.js";
 import { createAdminRouter, createOrganizationRouter, createOrgDashboardRouter, createParticipantRouter } from "./routes/api.routes.js";
@@ -15,7 +17,9 @@ export interface AppDependencies {
   db: Db;
   config: AppConfig;
   github: GitHubAppClient;
+  githubUser: GitHubUserAuth;
   blockchain: BlockchainRewardProvider;
+  claims: RewardClaimProvider;
   /** Supabase-backed bearer authentication (see security/auth.ts). */
   authenticate: RequestHandler;
   /** Supabase Auth register/login/logout handlers. */
@@ -27,7 +31,7 @@ export interface AppDependencies {
 
 export function createApp(deps: AppDependencies): { app: Express; services: Services } {
   const services = createServices({
-    db: deps.db, config: deps.config, github: deps.github, blockchain: deps.blockchain, now: deps.now ?? (() => new Date()),
+    db: deps.db, config: deps.config, github: deps.github, githubUser: deps.githubUser, blockchain: deps.blockchain, claims: deps.claims, now: deps.now ?? (() => new Date()),
   });
   const limiters = createRateLimiters(deps.rateLimit ?? true);
   const app = express();

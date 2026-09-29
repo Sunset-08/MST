@@ -149,8 +149,11 @@ export class ChallengesService {
     await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for("update");
   }
 
-  async start(challengeId: string, user: { id: string }) {
+  async start(challengeId: string, user: { id: string; githubUsername?: string | null }) {
     if (!z.uuid().safeParse(challengeId).success) throw notFound("Challenge");
+    if (this.deps.config.requireGithubConnection && !user.githubUsername) {
+      throw forbidden("Connect your GitHub account before starting challenges", "GITHUB_CONNECTION_REQUIRED");
+    }
     const now = this.deps.now();
     const { db } = this.deps;
     const [row] = await db.select({ challenge: challenges, orgStatus: organizations.status }).from(challenges)

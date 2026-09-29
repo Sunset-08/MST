@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { AdminShell } from '@/components/admin/AdminShell';
-import { getAdminSubmissions } from '@/lib/api/admin';
+import { getAdminSubmissions, reviewAdminSubmission } from '@/lib/api/admin';
+import { errorMessage } from '@/lib/api/client';
 import type { AdminSubmissionEntry, SubmissionStatus } from '@/lib/types/admin';
 import { ClipboardList, Search, CheckCircle, Clock, XCircle, AlertCircle } from 'lucide-react';
 import { DIFFICULTY_BG, cn } from '@/lib/utils';
@@ -18,6 +19,35 @@ const STATUS_CONFIG: Record<SubmissionStatus, { color: string; icon: React.Eleme
 
 const ALL_STATUSES: SubmissionStatus[] = ['Submitted', 'Under Review', 'Verified', 'Failed', 'Rejected'];
 
+function ReviewActions({ id, onDone }: { id: string; onDone: () => void }) {
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function decide(decision: 'approve' | 'reject') {
+    if (reason.trim().length < 3) { setError('Add a reason'); return; }
+    setBusy(true);
+    setError('');
+    try {
+      await reviewAdminSubmission(id, decision, reason.trim());
+      onDone();
+    } catch (err) {
+      setError(errorMessage(err, 'Review failed'));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="space-y-1 min-w-52">
+      <input className="sx-input text-xs" placeholder="Reason" value={reason} onChange={(e) => setReason(e.target.value)} />
+      <div className="flex gap-1">
+        <button disabled={busy} onClick={() => decide('approve')} className="sx-btn sx-btn-sm" style={{ background: 'rgba(52,211,153,0.15)', color: '#34d399' }}>Approve</button>
+        <button disabled={busy} onClick={() => decide('reject')} className="sx-btn sx-btn-sm" style={{ background: 'rgba(248,113,113,0.15)', color: '#f87171' }}>Reject</button>
+      </div>
+      {error && <p className="text-xs text-rose-400">{error}</p>}
+    </div>
+  );
+}
+
 export default function AdminSubmissionsPage() {
   const [submissions, setSubmissions] = useState<AdminSubmissionEntry[]>([]);
   const [filtered, setFiltered] = useState<AdminSubmissionEntry[]>([]);
@@ -25,10 +55,11 @@ export default function AdminSubmissionsPage() {
   const [statusFilter, setStatusFilter] = useState<SubmissionStatus | 'all'>('all');
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
+  const load = () =>
     getAdminSubmissions().then((data) => { setSubmissions(data); setFiltered(data); })
       .finally(() => setIsLoading(false));
-  }, []);
+
+  useEffect(() => { void load(); }, []);
 
   useEffect(() => {
     let result = submissions;
@@ -91,12 +122,13 @@ export default function AdminSubmissionsPage() {
                   <th className="text-left px-5 py-3 font-semibold hidden md:table-cell">Difficulty</th>
                   <th className="text-left px-5 py-3 font-semibold">Status</th>
                   <th className="text-left px-5 py-3 font-semibold hidden lg:table-cell">Submitted</th>
+                  <th className="text-left px-5 py-3 font-semibold">Review</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
                 {isLoading
                   ? Array.from({ length: 5 }).map((_, i) => (
-                      <tr key={i}><td colSpan={5} className="px-5 py-3"><div className="skeleton h-8 rounded" /></td></tr>
+                      <tr key={i}><td colSpan={6} className="px-5 py-3"><div className="skeleton h-8 rounded" /></td></tr>
                     ))
                   : filtered.map((sub) => {
                       const { color, icon: StatusIcon } = STATUS_CONFIG[sub.status];
@@ -120,6 +152,9 @@ export default function AdminSubmissionsPage() {
                           </td>
                           <td className="px-5 py-3 hidden lg:table-cell text-xs text-slate-500">
                             {new Date(sub.submittedAt).toLocaleString()}
+                          </td>
+                          <td className="px-5 py-3">
+                            {sub.status === 'Under Review' ? <ReviewActions id={sub.id} onDone={() => void load()} /> : <span className="text-xs text-slate-600">—</span>}
                           </td>
                         </tr>
                       );

@@ -10,11 +10,13 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { GitBranch, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { authLogin } from '@/lib/api/auth';
+import { useAuth } from '@/lib/context/AuthContext';
+import { errorMessage } from '@/lib/api/client';
 import Image from 'next/image';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -27,24 +29,12 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await authLogin(email, password);
-
-      // Authoritative role check — backend is authoritative
-      if (res.user.role === 'platform_admin') {
-        localStorage.setItem('sx_admin_session', JSON.stringify({
-          id: res.user.id,
-          username: res.user.username,
-          displayName: res.user.displayName,
-          email: res.user.email,
-          role: 'admin',
-          createdAt: res.user.createdAt,
-        }));
-        router.push('/admin/dashboard');
-      } else {
-        router.push('/dashboard');
-      }
+      const me = await login(email.trim(), password);
+      if (me.role === 'platform_admin') router.push('/admin/dashboard');
+      else if (me.requirements?.githubConnection && !me.github?.connected) router.push('/auth/onboarding');
+      else router.push('/dashboard');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Invalid credentials. Please try again.');
+      setError(errorMessage(err, 'Sign in failed. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -56,7 +46,6 @@ export default function LoginPage() {
     await new Promise((r) => setTimeout(r, 500));
     router.push('/dashboard');
   }
-
   return (
     <div className="min-h-screen flex overflow-hidden relative">
       {/* ── Full-screen cyberpunk background ── */}
@@ -102,6 +91,7 @@ export default function LoginPage() {
             />
           </Link>
         </div>
+
 
         {/* Center — tagline */}
         <div className="space-y-6">
@@ -198,6 +188,7 @@ export default function LoginPage() {
             </div>
 
             {/* Error */}
+
             {error && (
               <div
                 className="rounded-sm p-3"
@@ -361,48 +352,7 @@ export default function LoginPage() {
               <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
             </div>
 
-            {/* GitHub */}
-            <button
-              id="github-login-btn"
-              onClick={handleGitHubLogin}
-              disabled={loading}
-              className="w-full py-3 flex items-center justify-center gap-3 text-sm font-semibold transition-all duration-200"
-              style={{
-                background: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.12)',
-                color: '#e2e8f0',
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.08)';
-                (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.2)';
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.04)';
-                (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.12)';
-              }}
-            >
-              <GitBranch size={18} />
-              Continue with GitHub
-            </button>
 
-            {/* Sign up */}
-            <p className="text-center text-sm text-slate-500">
-              Don&apos;t have an account?{' '}
-              <Link
-                href="/auth/signup"
-                className="font-semibold transition-colors"
-                style={{ color: '#00d4ff' }}
-              >
-                Sign up
-              </Link>
-            </p>
-
-            {/* Back */}
-            <div className="text-center">
-              <Link href="/" className="text-xs text-slate-700 hover:text-slate-500 transition-colors">
-                ← Back to Portal Selection
-              </Link>
-            </div>
           </div>
         </div>
       </div>

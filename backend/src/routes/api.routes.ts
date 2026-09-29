@@ -18,9 +18,14 @@ export function createParticipantRouter({ services, authenticate, limiters }: Ro
   const maybeAuth = optionalAuth(authenticate);
 
   r.get("/users/me", authenticate, c.me);
+  r.put("/users/me", authenticate, c.updateMe);
   r.get("/users/me/stats", authenticate, c.stats);
   r.get("/users/me/history", authenticate, c.history);
   r.get("/users/:username", c.publicProfile);
+
+  r.post("/github/connect/start", authenticate, limiters.write, c.githubConnectStart);
+  r.post("/github/connect/poll", authenticate, c.githubConnectPoll);
+  r.delete("/github/connect", authenticate, c.githubDisconnect);
 
   r.get("/challenges", maybeAuth, c.listChallenges);
   r.get("/challenges/:id", maybeAuth, c.getChallenge);
@@ -32,6 +37,8 @@ export function createParticipantRouter({ services, authenticate, limiters }: Ro
 
   r.get("/leaderboard", maybeAuth, c.leaderboard);
   r.get("/rewards", authenticate, c.rewards);
+  r.get("/rewards/:id/claim-info", authenticate, limiters.write, c.rewardClaimInfo);
+  r.post("/rewards/:id/claim", authenticate, limiters.write, c.rewardClaim);
 
   r.get("/wallets", authenticate, c.listWallets);
   r.post("/wallets/challenge", authenticate, limiters.write, c.walletChallenge);
@@ -63,6 +70,7 @@ export function createOrgDashboardRouter({ services, authenticate, limiters }: R
   r.use(authenticate, requireOrgContext(services.deps.db, "member"));
   const admin = requireOrgRole("admin");
   r.get("/stats", c.stats);
+  r.get("/mst-status", c.mstStatus);
   r.get("/activity", c.activity);
   r.get("/challenges", c.listChallenges);
   r.post("/challenges", admin, limiters.write, c.createChallenge);

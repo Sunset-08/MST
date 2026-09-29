@@ -8,6 +8,7 @@ import { CheckCircle, XCircle, Clock, Zap, Star, Coins, Flame, Trophy, RotateCcw
 import type { VerificationResult } from '@/lib/types';
 import { formatPoints, truncateAddress } from '@/lib/utils';
 import Link from 'next/link';
+import { explorerTxUrl } from '@/lib/chain/mst';
 
 // -------- Verified --------
 
@@ -57,6 +58,17 @@ export function VerifiedCard({
           <p className="text-xs text-slate-500 mt-1">MSTC</p>
         </div>
       </div>
+
+      {/* MST reward state */}
+      {result.mstRewardStatus === 'WalletRequired' && (
+        <div className="bg-amber-400/5 border border-amber-400/20 rounded-xl p-4 text-left text-sm text-slate-300">
+          <strong className="text-amber-400">Link a wallet to receive your MST reward.</strong>{' '}
+          Connect and link a wallet from your <Link href="/profile" className="underline text-blue-300">profile</Link>; the reward is created as soon as it is linked.
+        </div>
+      )}
+      {result.mstRewardStatus && result.mstRewardStatus !== 'WalletRequired' && (
+        <p className="text-xs text-slate-500">MST reward status: <span className="text-slate-300">{result.mstRewardStatus}</span></p>
+      )}
 
       {/* Streak & leaderboard update */}
       {result.streakUpdated && (
@@ -136,7 +148,7 @@ export function FailedCard({
 
 // -------- Pending --------
 
-export function PendingCard() {
+export function PendingCard({ reason }: { reason?: string }) {
   return (
     <div className="verification-pending p-8 text-center space-y-6 animate-fade-in">
       <div className="flex justify-center">
@@ -156,6 +168,7 @@ export function PendingCard() {
         <p className="text-xs text-slate-500 mt-2">
           Points are awarded only after successful verification.
         </p>
+        {reason && <p className="text-xs text-slate-400 mt-3">{reason}</p>}
       </div>
 
       <div className="flex items-center justify-center gap-2">
@@ -217,7 +230,7 @@ export function MSTRewardCard({
           </div>
 
           <a
-            href={`https://explorer.mstblockchain.com/tx/${transactionHash}`}
+            href={explorerTxUrl(transactionHash)}
             target="_blank"
             rel="noopener noreferrer"
             id="view-on-mstscan-btn"

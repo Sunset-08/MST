@@ -19,6 +19,7 @@ export function createOrganizationController(s: Services) {
       ok(res, await s.organizations.removeMember(param(req.params.id), req.securexUser!, param(req.params.userId)))),
 
     // /api/org (organization context from X-Organization-Id)
+    mstStatus: handler(async (_req, res) => ok(res, s.org.mstStatus())),
     stats: handler(async (req, res) => ok(res, await s.org.stats(ctx(req).organizationId))),
     activity: handler(async (req, res) => ok(res, await s.org.activity(ctx(req).organizationId, req.query))),
     listChallenges: handler(async (req, res) => ok(res, await s.org.listChallenges(ctx(req).organizationId, ctx(req).role, req.query))),
