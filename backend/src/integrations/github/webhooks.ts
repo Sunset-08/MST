@@ -1,5 +1,5 @@
 import { createHmac } from "node:crypto";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { githubEvents, githubIssues, githubOrganizations, repositories } from "../../db/schema.js";
 import type { ServiceDeps } from "../../services/deps.js";
 import { safeEqual } from "../../utils/crypto.js";
@@ -58,17 +58,26 @@ export class GitHubWebhookService {
         if (eventName === "installation" && action === "deleted") {
           await tx.update(repositories).set({ isActive: false, updatedAt: now }).where(eq(repositories.githubOrganizationId, link.id));
         } else if (eventName === "installation_repositories") {
-          for (const r of (payload.repositories_added as AnyRecord[] | undefined) ?? []) await upsertRepository(tx, link.id, repoData(r), now);
+          // Granting a repository to the app on GitHub is a deliberate act: connect (or re-enable) it.
+          for (const r of (payload.repositories_added as AnyRecord[] | undefined) ?? []) {
+            const data = repoData(r);
+            const row = await upsertRepository(tx, link.id, data, now);
+            if (!data.archived) await tx.update(repositories).set({ isActive: true, updatedAt: now }).where(eq(repositories.id, row.id));
+          }
           const removed = ((payload.repositories_removed as AnyRecord[] | undefined) ?? []).map((r) => String(r.id));
           if (removed.length) await tx.update(repositories).set({ isActive: false, updatedAt: now }).where(inArray(repositories.githubRepoId, removed));
         } else if (eventName === "issues" && rec(payload.issue) && rec(payload.repository)) {
-          const repo = await upsertRepository(tx, link.id, repoData(rec(payload.repository)!), now);
-          repositoryId = repo.id;
-          const issue = normalizeIssue(rec(payload.issue)!);
-          if (action === "deleted") {
-            await tx.update(githubIssues).set({ state: "deleted", syncedAt: now }).where(eq(githubIssues.githubIssueId, issue.id));
-          } else {
-            await upsertIssue(tx, repo.id, issue, now);
+          // Only repositories the organization connected receive issues; a removed or disabled one is ignored.
+          const [repo] = await tx.select().from(repositories)
+            .where(and(eq(repositories.githubRepoId, String(rec(payload.repository)!.id)), eq(repositories.githubOrganizationId, link.id))).limit(1);
+          if (repo?.isActive) {
+            repositoryId = repo.id;
+            const issue = normalizeIssue(rec(payload.issue)!);
+            if (action === "deleted") {
+              await tx.update(githubIssues).set({ state: "deleted", syncedAt: now }).where(eq(githubIssues.githubIssueId, issue.id));
+            } else {
+              await upsertIssue(tx, repo.id, issue, now);
+            }
           }
         }
       }

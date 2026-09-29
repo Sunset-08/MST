@@ -131,6 +131,7 @@ function QuestionEditor({
       {!collapsed && (
         <div className="p-5 space-y-4">
           {/* Question type selector */}
+          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide block">Question type</label>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {(Object.keys(QUESTION_TYPE_LABELS) as QuestionType[]).map((type) => (
               <button
@@ -277,6 +278,7 @@ interface QuestionBuilderProps {
 }
 
 export function QuestionBuilder({ questions, onChange }: QuestionBuilderProps) {
+  const [newType, setNewType] = useState<QuestionType>('multiple_choice');
   function addQuestion(type: QuestionType = 'multiple_choice') {
     onChange([...questions, newQuestion(type)]);
   }
@@ -317,43 +319,28 @@ export function QuestionBuilder({ questions, onChange }: QuestionBuilderProps) {
         />
       ))}
 
-      {/* Add question controls */}
+      {/* Add question: one control; the type of an existing question is changed inside its own editor */}
       <div className="flex flex-wrap items-center gap-2">
+        <select
+          id="add-question-type"
+          className="sx-input"
+          style={{ width: 'auto', minWidth: 210, appearance: 'none', cursor: 'pointer' }}
+          value={newType}
+          onChange={(e) => setNewType(e.target.value as QuestionType)}
+          aria-label="Type of the question to add"
+        >
+          {(Object.keys(QUESTION_TYPE_LABELS) as QuestionType[]).map((type) => (
+            <option key={type} value={type}>{QUESTION_TYPE_LABELS[type]}</option>
+          ))}
+        </select>
         <button
           type="button"
-          id="add-mc-question-btn"
-          onClick={() => addQuestion('multiple_choice')}
+          id="add-question-btn"
+          onClick={() => addQuestion(newType)}
           className="sx-btn sx-btn-secondary sx-btn-sm"
         >
           <Plus size={14} />
-          Multiple Choice
-        </button>
-        <button
-          type="button"
-          id="add-short-question-btn"
-          onClick={() => addQuestion('short_answer')}
-          className="sx-btn sx-btn-secondary sx-btn-sm"
-        >
-          <Plus size={14} />
-          Short Answer
-        </button>
-        <button
-          type="button"
-          id="add-reasoning-question-btn"
-          onClick={() => addQuestion('security_reasoning')}
-          className="sx-btn sx-btn-secondary sx-btn-sm"
-        >
-          <Plus size={14} />
-          Security Reasoning
-        </button>
-        <button
-          type="button"
-          id="add-structured-question-btn"
-          onClick={() => addQuestion('structured_response')}
-          className="sx-btn sx-btn-secondary sx-btn-sm"
-        >
-          <Plus size={14} />
-          Structured Response
+          Add question
         </button>
       </div>
 

@@ -134,8 +134,22 @@ export function toQuery(params: Record<string, string | number | undefined | nul
 }
 
 /** Human-readable message for any thrown value. */
+/** Turns API validation details ([{ path, message }]) into "field: reason" so users can see what to fix. */
+function validationSummary(details: unknown): string {
+  if (!Array.isArray(details)) return '';
+  const parts = details
+    .slice(0, 3)
+    .map((d) => {
+      const item = d as { path?: unknown[]; message?: string };
+      const field = Array.isArray(item.path) ? item.path.join('.') : '';
+      return field ? `${field}: ${item.message ?? 'invalid'}` : (item.message ?? '');
+    })
+    .filter(Boolean);
+  return parts.length ? ` (${parts.join('; ')})` : '';
+}
+
 export function errorMessage(err: unknown, fallback = 'Something went wrong'): string {
-  if (err instanceof ApiError) return err.message;
+  if (err instanceof ApiError) return `${err.message}${validationSummary(err.details)}`;
   if (err instanceof Error) return err.message;
   return fallback;
 }

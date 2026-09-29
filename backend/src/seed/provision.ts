@@ -43,7 +43,7 @@ export async function provisionSeedData(services: Services, input: ProvisionInpu
       result.github = { linked: false, repositoriesSynced: 0, issuesSynced: 0, skipped: "GitHub App is not configured" };
     } else {
       await services.github.linkInstallation(organizationId, { id: input.admin.id, role: "platform_admin" }, { installationId: input.githubInstallationId });
-      const synced = await services.github.sync(organizationId, {});
+      const synced = await services.github.sync(organizationId, { importAll: true });
       result.github = { linked: true, repositoriesSynced: synced.repositoriesSynced, issuesSynced: synced.issuesSynced };
     }
   }

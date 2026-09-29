@@ -9,8 +9,11 @@ import { useEffect, useState } from 'react';
 import { OrgShell } from '@/components/org/OrgShell';
 import { OrgWalletCard } from '@/components/org/OrgWalletCard';
 import { useOrg } from '@/lib/context/OrgContext';
-import { Settings, Building2, User, Wallet, GitBranch, RefreshCw, ExternalLink, CheckCircle } from 'lucide-react';
-import { getGithubInstallUrl, getOrgGithub, linkGithubInstallation, syncOrgGithub, updateOrganization, type OrgGithubOverview } from '@/lib/api/org';
+import { Settings, Building2, User, Wallet, GitBranch, RefreshCw, ExternalLink, CheckCircle, Plus, Pencil, Trash2 } from 'lucide-react';
+import {
+  connectGithubRepos, getAvailableGithubRepos, getGithubInstallUrl, getOrgGithub, linkGithubInstallation, removeGithubRepo, syncOrgGithub,
+  updateGithubRepo, updateOrganization, type OrgGithubAvailableInstallation, type OrgGithubOverview,
+} from '@/lib/api/org';
 import { errorMessage } from '@/lib/api/client';
 
 export default function OrgSettingsPage() {
@@ -20,8 +23,11 @@ export default function OrgSettingsPage() {
   const [saveMsg, setSaveMsg] = useState('');
   const [github, setGithub] = useState<OrgGithubOverview | null>(null);
   const [ghMsg, setGhMsg] = useState('');
-  const [busy, setBusy] = useState<'' | 'save' | 'sync' | 'install' | 'link'>('');
+  const [busy, setBusy] = useState<'' | 'save' | 'sync' | 'install' | 'link' | 'repos'>('');
   const [installationId, setInstallationId] = useState('');
+  const [available, setAvailable] = useState<OrgGithubAvailableInstallation[] | null>(null);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [editingRepo, setEditingRepo] = useState<{ id: string; defaultBranch: string } | null>(null);
 
   useEffect(() => {
     if (organization) setForm({ name: organization.name, description: organization.description ?? '', website: organization.website ?? '' });
@@ -62,11 +68,11 @@ export default function OrgSettingsPage() {
     }
   }
 
-  async function sync() {
+  async function sync(importAll = false) {
     setBusy('sync');
     setGhMsg('');
     try {
-      const r = await syncOrgGithub();
+      const r = await syncOrgGithub(importAll);
       setGhMsg(`Synced ${r.repositoriesSynced} repositories and ${r.issuesSynced} issues.`);
       await loadGithub();
     } catch (err) {
@@ -83,9 +89,67 @@ export default function OrgSettingsPage() {
     try {
       const r = await linkGithubInstallation(installationId.trim());
       setGhMsg(`Linked ${r.login}.`);
-      await sync();
+      await sync(true);
     } catch (err) {
       setGhMsg(errorMessage(err, 'Could not link that installation'));
+      setBusy('');
+    }
+  }
+
+  async function openAddRepos() {
+    setBusy('repos');
+    setGhMsg('');
+    try {
+      setAvailable((await getAvailableGithubRepos()).installations);
+      setPicked([]);
+    } catch (err) {
+      setGhMsg(errorMessage(err, 'Could not load the repositories available to the GitHub App'));
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function connectPicked() {
+    if (picked.length === 0) return;
+    setBusy('repos');
+    setGhMsg('');
+    try {
+      const r = await connectGithubRepos(picked);
+      setGhMsg(`Connected ${r.connected.length} ${r.connected.length === 1 ? 'repository' : 'repositories'} and imported ${r.issuesSynced} issues.`);
+      setAvailable(null);
+      await loadGithub();
+    } catch (err) {
+      setGhMsg(errorMessage(err, 'Could not connect the selected repositories'));
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function saveRepo(id: string, patch: { isActive?: boolean; defaultBranch?: string }) {
+    setBusy('repos');
+    setGhMsg('');
+    try {
+      await updateGithubRepo(id, patch);
+      setEditingRepo(null);
+      await loadGithub();
+    } catch (err) {
+      setGhMsg(errorMessage(err, 'Could not update the repository'));
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function removeRepo(id: string, name: string) {
+    if (!window.confirm(`Remove ${name} from this organization? Its imported issues are deleted; you can add it again later.`)) return;
+    setBusy('repos');
+    setGhMsg('');
+    try {
+      await removeGithubRepo(id);
+      setGhMsg(`Removed ${name}.`);
+      await loadGithub();
+    } catch (err) {
+      setGhMsg(errorMessage(err, 'Could not remove the repository'));
+    } finally {
       setBusy('');
     }
   }
@@ -164,7 +228,7 @@ export default function OrgSettingsPage() {
               <GitBranch size={16} className="text-violet-400" /> GitHub
             </h2>
             {github && github.installations.length > 0 && canEdit && (
-              <button id="org-github-sync-btn" onClick={sync} disabled={busy === 'sync'} className="sx-btn sx-btn-secondary sx-btn-sm gap-2">
+              <button id="org-github-sync-btn" onClick={() => void sync()} disabled={busy === 'sync'} className="sx-btn sx-btn-secondary sx-btn-sm gap-2">
                 <RefreshCw size={13} className={busy === 'sync' ? 'animate-spin' : ''} /> Sync repositories &amp; issues
               </button>
             )}
@@ -205,17 +269,94 @@ export default function OrgSettingsPage() {
                 </div>
               ))}
               <div className="space-y-2">
-                <p className="text-xs text-slate-500 uppercase tracking-wide font-semibold">Repositories ({github.repositories.length})</p>
-                {github.repositories.length === 0 && <p className="text-sm text-slate-500">No repositories synced yet.</p>}
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs text-slate-500 uppercase tracking-wide font-semibold">Repositories ({github.repositories.length})</p>
+                  {canEdit && (
+                    <button id="org-github-add-repos-btn" onClick={() => void openAddRepos()} disabled={busy === 'repos' || !github.configured} className="sx-btn sx-btn-secondary sx-btn-sm gap-2">
+                      <Plus size={13} /> Add repositories
+                    </button>
+                  )}
+                </div>
+                {github.repositories.length === 0 && <p className="text-sm text-slate-500">No repositories connected yet. Use “Add repositories” to choose which ones to import.</p>}
                 {github.repositories.map((r) => (
-                  <div key={r.id} className="flex items-center justify-between gap-3 text-sm">
-                    <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 flex items-center gap-1">
-                      {r.fullName} <ExternalLink size={11} />
-                    </a>
-                    <span className="text-xs text-slate-500">{r.openIssueCount} open / {r.issueCount} issues</span>
+                  <div key={r.id} className="rounded-lg border border-white/5 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <div className="min-w-0">
+                        <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 flex items-center gap-1 truncate">
+                          {r.fullName} <ExternalLink size={11} />
+                        </a>
+                        <span className="text-xs text-slate-500">
+                          {r.openIssueCount} open / {r.issueCount} issues · branch {r.defaultBranch}
+                          {!r.isActive && <span className="text-amber-400"> · syncing disabled</span>}
+                        </span>
+                      </div>
+                      {canEdit && (
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <button id={`org-github-repo-edit-${r.id}`} title="Manage repository" className="sx-btn-ghost p-1.5 rounded-lg"
+                            onClick={() => setEditingRepo(editingRepo?.id === r.id ? null : { id: r.id, defaultBranch: r.defaultBranch })}>
+                            <Pencil size={14} />
+                          </button>
+                          <button id={`org-github-repo-remove-${r.id}`} title="Remove repository" className="sx-btn-ghost p-1.5 rounded-lg hover:text-rose-400"
+                            disabled={busy === 'repos'} onClick={() => void removeRepo(r.id, r.fullName)}>
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    {editingRepo?.id === r.id && (
+                      <div className="flex flex-wrap items-end gap-3 pt-1">
+                        <div className="space-y-1">
+                          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Default branch</label>
+                          <input className="sx-input" value={editingRepo.defaultBranch}
+                            onChange={(e) => setEditingRepo({ id: r.id, defaultBranch: e.target.value })} />
+                        </div>
+                        <button className="sx-btn sx-btn-sm" disabled={busy === 'repos' || !editingRepo.defaultBranch.trim()}
+                          style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)', color: 'white' }}
+                          onClick={() => void saveRepo(r.id, { defaultBranch: editingRepo.defaultBranch.trim() })}>Save</button>
+                        <button className="sx-btn sx-btn-secondary sx-btn-sm" disabled={busy === 'repos'}
+                          onClick={() => void saveRepo(r.id, { isActive: !r.isActive })}>
+                          {r.isActive ? 'Disable syncing' : 'Enable syncing'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
+
+              {available && (
+                <div id="org-github-add-repos-panel" className="rounded-xl border border-violet-400/20 bg-violet-400/5 p-4 space-y-3">
+                  <p className="text-sm font-semibold text-white">Add repositories</p>
+                  {available.map((inst) => {
+                    const choices = inst.repositories.filter((r) => !r.connected && !r.archived);
+                    return (
+                      <div key={inst.id} className="space-y-2">
+                        <p className="text-xs text-slate-500">
+                          {inst.login} · {choices.length} available
+                          {' · '}
+                          <a href={inst.manageUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">
+                            Give the app access to more repositories on GitHub
+                          </a>
+                        </p>
+                        {choices.length === 0 && <p className="text-sm text-slate-500">Every accessible repository is already connected.</p>}
+                        {choices.map((r) => (
+                          <label key={r.githubRepoId} className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                            <input type="checkbox" checked={picked.includes(r.githubRepoId)}
+                              onChange={(e) => setPicked((p) => (e.target.checked ? [...p, r.githubRepoId] : p.filter((x) => x !== r.githubRepoId)))} />
+                            {r.fullName} {r.private && <span className="text-xs text-slate-500">(private)</span>}
+                          </label>
+                        ))}
+                      </div>
+                    );
+                  })}
+                  <div className="flex items-center gap-2">
+                    <button id="org-github-connect-repos-btn" className="sx-btn sx-btn-sm" disabled={picked.length === 0 || busy === 'repos'}
+                      style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)', color: 'white' }} onClick={() => void connectPicked()}>
+                      {busy === 'repos' ? 'Connecting…' : `Connect ${picked.length || ''} selected`.trim()}
+                    </button>
+                    <button className="sx-btn sx-btn-secondary sx-btn-sm" onClick={() => setAvailable(null)}>Cancel</button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
           {ghMsg && <p className="text-xs text-slate-400">{ghMsg}</p>}

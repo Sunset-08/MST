@@ -148,6 +148,31 @@ export function validateChallengeDraft(
   if (draft.mstReward === '' || Number(draft.mstReward) <= 0) missing.push('MST reward');
   if (!draft.githubRepository.trim()) missing.push('GitHub repository');
 
+  // Mirrors the backend contract so the API never receives something it will reject.
+  const described = (draft.description.trim() || draft.securityIssue.trim());
+  if (draft.title.trim() && draft.title.trim().length < 3) missing.push('Title (at least 3 characters)');
+  if (described.length > 0 && described.length < 10) missing.push('Description (at least 10 characters)');
+  if (draft.pointsReward !== '' && !Number.isInteger(Number(draft.pointsReward))) missing.push('Points reward (whole number)');
+  if (draft.mstReward !== '' && !Number.isInteger(Number(draft.mstReward))) missing.push('MST reward (whole number)');
+  if (draft.maxAttempts !== '' && (!Number.isInteger(Number(draft.maxAttempts)) || Number(draft.maxAttempts) < 1)) {
+    missing.push('Max attempts (whole number, 1 or more)');
+  }
+  draft.questions.forEach((q, i) => {
+    const n = i + 1;
+    if (!q.questionText.trim()) missing.push(`Question ${n}: text`);
+    if (!Number.isInteger(q.points) || q.points < 0) missing.push(`Question ${n}: points (whole number)`);
+    if (q.type === 'multiple_choice') {
+      const filled = (q.options ?? []).filter((o) => o.text.trim());
+      if (filled.length < 2) missing.push(`Question ${n}: at least two answer options`);
+      else if (!filled.some((o) => o.id === q.correctAnswer)) missing.push(`Question ${n}: mark a filled option as correct`);
+    } else if (draft.verificationType === 'rule_based' && !q.expectedAnswer?.trim()) {
+      missing.push(`Question ${n}: expected answer (needed for rule-based checking)`);
+    }
+  });
+  if (draft.verificationType === 'rule_based' && draft.challengeType && draft.challengeType !== 'investigation') {
+    missing.push('Rule-based verification needs the Investigation challenge type');
+  }
+
   return {
     isValid: missing.length === 0,
     missingFields: missing,

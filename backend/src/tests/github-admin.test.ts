@@ -85,7 +85,7 @@ describe("GitHub organization flow", () => {
   test("repository and issue sync upserts without duplicates and skips pull requests", async () => {
     ctx.github.repos.set("222", [repo]);
     ctx.github.issues.set("acme-sec/vault", [issue(1, "Signer key exposed"), issue(2, "RPC not verified", "closed")]);
-    const first = await ctx.api("POST", "/api/org/github/sync", { token: seeded.owner.token, headers: hdr(), body: {} });
+    const first = await ctx.api("POST", "/api/org/github/sync", { token: seeded.owner.token, headers: hdr(), body: { importAll: true } });
     assert.equal(first.status, 200, JSON.stringify(first.body));
     assert.equal(first.body.data.repositoriesSynced, 1);
     assert.equal(first.body.data.issuesSynced, 2, JSON.stringify({ body: first.body, calls: ctx.github.calls }));
@@ -230,5 +230,124 @@ describe("admin", () => {
     const self = await ctx.api("POST", `/api/admin/submissions/${sub.body.data.submissionId}/review`, { token: admin.token, body: { decision: "approve", reason: "self" } });
     assert.equal(self.status, 403);
     assert.equal(self.body.error.code, "SELF_REVIEW_FORBIDDEN");
+  });
+});
+
+describe("GitHub multiple repositories", () => {
+  const repoOf = (id: number, name: string) => ({ ...repo, id: String(id), owner: "zeta-labs", name, fullName: `zeta-labs/${name}`, url: `https://github.com/zeta-labs/${name}` });
+  const [r1, r2, r3] = [repoOf(801, "alpha"), repoOf(802, "beta"), repoOf(803, "gamma")];
+  let org: Awaited<ReturnType<typeof seedOrgWithChallenge>>;
+  const hdr = () => ({ "X-Organization-Id": org.orgId });
+  const api = (method: string, path: string, body?: unknown, token = org.owner.token) => ctx.api(method, path, { token, headers: hdr(), body });
+
+  test("an organization connects several repositories from its installation and lists them all", async () => {
+    org = await seedOrgWithChallenge(ctx);
+    const url = await api("GET", "/api/org/github/install-url");
+    ctx.github.installations.set("777", {
+      ...installation("777", ctx.clock.now.toISOString()),
+      account: { id: "9777", login: "zeta-labs", type: "Organization", name: "Zeta Labs", htmlUrl: "https://github.com/zeta-labs" },
+    });
+    ctx.github.repos.set("777", [r1, r2, r3]);
+    ctx.github.issues.set("zeta-labs/alpha", [issue(1, "Alpha issue")]);
+    ctx.github.issues.set("zeta-labs/beta", [issue(2, "Beta issue")]);
+    const linked = await api("POST", "/api/org/github/installations", { installationId: "777", state: url.body.data.state });
+    assert.equal(linked.status, 201, JSON.stringify(linked.body));
+
+    // Linking alone connects nothing; a plain sync does not pull in repositories the org did not pick.
+    const plain = await api("POST", "/api/org/github/sync", {});
+    assert.equal(plain.body.data.repositoriesSynced, 0);
+
+    const available = await api("GET", "/api/org/github/repositories/available");
+    assert.equal(available.status, 200, JSON.stringify(available.body));
+    const inst = available.body.data.installations[0];
+    assert.equal(inst.manageUrl, "https://github.com/organizations/zeta-labs/settings/installations/777");
+    assert.deepEqual(inst.repositories.map((r: any) => [r.name, r.connected]), [["alpha", false], ["beta", false], ["gamma", false]]);
+
+    const connected = await api("POST", "/api/org/github/repositories", { githubRepoIds: ["801", "802"] });
+    assert.equal(connected.status, 201, JSON.stringify(connected.body));
+    assert.equal(connected.body.data.connected.length, 2);
+    assert.equal(connected.body.data.issuesSynced, 2);
+    const overview = await api("GET", "/api/org/github");
+    assert.deepEqual(overview.body.data.repositories.map((r: any) => r.name), ["alpha", "beta"]);
+
+    // Connecting again is idempotent; sync keeps refreshing only the connected ones.
+    await api("POST", "/api/org/github/repositories", { githubRepoIds: ["801"] });
+    const sync = await api("POST", "/api/org/github/sync", {});
+    assert.equal(sync.body.data.repositoriesSynced, 2);
+    assert.equal((await api("GET", "/api/org/github")).body.data.repositories.length, 2);
+    const flags = (await api("GET", "/api/org/github/repositories/available")).body.data.installations[0].repositories;
+    assert.deepEqual(flags.map((r: any) => r.connected), [true, true, false]);
+  });
+
+  test("repositories the installation cannot access, or that belong to another org, are rejected", async () => {
+    const bad = await api("POST", "/api/org/github/repositories", { githubRepoIds: ["803", "99999"] });
+    assert.equal(bad.status, 400);
+    assert.equal(bad.body.error.code, "GITHUB_REPOSITORY_NOT_ACCESSIBLE");
+    const stranger = await seedOrgWithChallenge(ctx);
+    const overviewOf = await ctx.api("GET", "/api/org/github", { token: stranger.owner.token, headers: { "X-Organization-Id": stranger.orgId } });
+    assert.equal(overviewOf.body.data.repositories.length, 0);
+    const [alpha] = await ctx.db.select().from(repositories).where(eq(repositories.githubRepoId, "801"));
+    const patch = await ctx.api("PUT", `/api/org/github/repositories/${alpha!.id}`, {
+      token: stranger.owner.token, headers: { "X-Organization-Id": stranger.orgId }, body: { isActive: false },
+    });
+    assert.equal(patch.status, 404);
+    const empty = await api("POST", "/api/org/github/repositories", { githubRepoIds: [] });
+    assert.equal(empty.status, 400);
+  });
+
+  test("a repository can be disabled (stays disabled across sync), re-enabled and removed", async () => {
+    const [beta] = await ctx.db.select().from(repositories).where(eq(repositories.githubRepoId, "802"));
+    const off = await api("PUT", `/api/org/github/repositories/${beta!.id}`, { isActive: false, defaultBranch: "develop" });
+    assert.equal(off.status, 200, JSON.stringify(off.body));
+    assert.equal(off.body.data.isActive, false);
+    assert.equal(off.body.data.defaultBranch, "develop");
+    await api("POST", "/api/org/github/sync", {});
+    const [after] = await ctx.db.select().from(repositories).where(eq(repositories.id, beta!.id));
+    assert.equal(after!.isActive, false, "sync must not silently re-enable a disabled repository");
+    const on = await api("PUT", `/api/org/github/repositories/${beta!.id}`, { isActive: true });
+    assert.equal(on.body.data.isActive, true);
+
+    const [gamma] = [(await api("POST", "/api/org/github/repositories", { githubRepoIds: ["803"] })).body.data.connected[0]];
+    const removed = await api("DELETE", `/api/org/github/repositories/${gamma.id}`);
+    assert.equal(removed.status, 200, JSON.stringify(removed.body));
+    await api("POST", "/api/org/github/sync", {});
+    assert.equal((await ctx.db.select().from(repositories).where(eq(repositories.githubRepoId, "803"))).length, 0, "removed repository is not re-imported by sync");
+  });
+
+  test("a repository behind a challenge cannot be removed; org members cannot manage repositories", async () => {
+    const [alpha] = await ctx.db.select().from(repositories).where(eq(repositories.githubRepoId, "801"));
+    const [alphaIssue] = await ctx.db.select().from(githubIssues).where(eq(githubIssues.repositoryId, alpha!.id));
+    const created = await api("POST", "/api/org/challenges", {
+      title: "Alpha challenge", description: "Investigate the alpha issue thoroughly.", category: "Web Security", difficulty: "easy",
+      challengeType: "investigation", verificationType: "admin_review", pointsReward: 10, mstReward: 1, githubIssueId: alphaIssue!.id, status: "draft",
+    });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    const blocked = await api("DELETE", `/api/org/github/repositories/${alpha!.id}`);
+    assert.equal(blocked.status, 409);
+    assert.equal(blocked.body.error.code, "GITHUB_REPOSITORY_IN_USE");
+
+    const member = await ctx.user("ghmember");
+    await ctx.api("POST", `/api/organizations/${org.orgId}/members`, { token: org.owner.token, body: { userId: member.id, role: "member" } });
+    const denied = await api("POST", "/api/org/github/repositories", { githubRepoIds: ["803"] }, member.token);
+    assert.equal(denied.status, 403);
+  });
+
+  test("webhooks never resurrect a removed repository, but a repository granted on GitHub is connected", async () => {
+    assert.ok(ctx.github.installations.has("777"));
+    const send = (event: string, delivery: string, payload: Record<string, unknown>) => {
+      const raw = JSON.stringify({ installation: { id: 777 }, ...payload });
+      const sig = "sha256=" + createHmac("sha256", "whsec-test").update(raw).digest("hex");
+      return ctx.api("POST", "/api/webhooks/github", {
+        raw, headers: { "Content-Type": "application/json", "X-Hub-Signature-256": sig, "X-GitHub-Delivery": delivery, "X-GitHub-Event": event },
+      });
+    };
+    const gh = (r: typeof r3) => ({ id: Number(r.id), name: r.name, full_name: r.fullName, html_url: r.url, default_branch: "main", owner: { login: "zeta-labs" } });
+    const ev = await send("issues", "del-gamma-1", { action: "opened", repository: gh(r3), issue: { id: 9903, number: 3, title: "Gamma issue", body: "x", user: { login: "u" }, html_url: "https://github.com/zeta-labs/gamma/issues/3", state: "open", labels: [], created_at: "2026-08-01T00:00:00Z", updated_at: "2026-08-01T00:00:00Z" } });
+    assert.ok([200, 202].includes(ev.status), JSON.stringify(ev.body));
+    assert.equal((await ctx.db.select().from(repositories).where(eq(repositories.githubRepoId, "803"))).length, 0);
+    const added = await send("installation_repositories", "add-gamma-1", { action: "added", repositories_added: [gh(r3)] });
+    assert.ok([200, 202].includes(added.status), JSON.stringify(added.body));
+    const [gamma] = await ctx.db.select().from(repositories).where(eq(repositories.githubRepoId, "803"));
+    assert.equal(gamma?.isActive, true);
   });
 });

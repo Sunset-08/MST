@@ -6,7 +6,7 @@ import { challenges, githubEvents, githubIssues, githubOrganizations, organizati
 import type { ServiceDeps } from "../../services/deps.js";
 import { signPayload, verifySignedPayload } from "../../utils/crypto.js";
 import { iso } from "../../utils/dates.js";
-import { conflict, forbidden, parse, unavailable } from "../../utils/http.js";
+import { badRequest, conflict, forbidden, notFound, parse, unavailable } from "../../utils/http.js";
 import { likePattern, offsetOf, paginated, paginationSchema } from "../../utils/pagination.js";
 import type { GitHubInstallation, GitHubIssueData, GitHubRepositoryData } from "./types.js";
 
@@ -17,7 +17,20 @@ export const linkInstallationSchema = z.object({
   state: z.string().max(4096).optional(),
 }).strict();
 
-export const syncSchema = z.object({ repositoryId: z.uuid().optional() }).strict();
+export const syncSchema = z.object({
+  repositoryId: z.uuid().optional(),
+  /** First import after linking an installation: connect every repository the installation can access. */
+  importAll: z.boolean().optional(),
+}).strict();
+
+export const connectRepositoriesSchema = z.object({
+  githubRepoIds: z.array(z.union([z.string().regex(/^\d{1,20}$/), z.number().int().positive()]).transform(String)).min(1).max(100),
+}).strict();
+
+export const updateRepositorySchema = z.object({
+  isActive: z.boolean().optional(),
+  defaultBranch: z.string().trim().min(1).max(255).optional(),
+}).strict().refine((v) => Object.keys(v).length > 0, "Provide at least one field");
 
 export const issuesQuerySchema = paginationSchema.extend({
   repositoryId: z.uuid().optional(),
@@ -41,7 +54,8 @@ export async function upsertRepository(db: DbOrTx, githubOrganizationId: string,
     defaultBranch: r.defaultBranch, isActive: !r.archived, createdAt: now, updatedAt: now,
   }).onConflictDoUpdate({
     target: repositories.githubRepoId,
-    set: { githubOrganizationId, name: r.name, fullName: r.fullName, url: r.url, defaultBranch: r.defaultBranch, isActive: !r.archived, updatedAt: now },
+    // Syncs and webhooks refresh metadata but never re-enable a repository the organization disabled.
+    set: { githubOrganizationId, name: r.name, fullName: r.fullName, url: r.url, defaultBranch: r.defaultBranch, updatedAt: now, ...(r.archived ? { isActive: false } : {}) },
   }).returning();
   return row!;
 }
@@ -153,23 +167,113 @@ export class GitHubService {
     let issuesSynced = 0;
     for (const inst of installs) {
       const repos = await this.deps.github.listInstallationRepositories(inst.installationId);
+      const known = new Map((await this.deps.db.select().from(repositories).where(eq(repositories.githubOrganizationId, inst.id))).map((r) => [r.githubRepoId, r]));
+      // Only repositories the organization connected are refreshed; everything else is added via connectRepositories.
+      const wanted = repos.filter((r) => input.importAll || known.has(r.id));
       const rows = [];
-      for (const r of repos) rows.push({ row: await upsertRepository(this.deps.db, inst.id, r, now), data: r });
+      for (const r of wanted) rows.push({ row: await upsertRepository(this.deps.db, inst.id, r, now), data: r });
       reposSynced += rows.length;
-      const seen = rows.map((r) => r.row.id);
-      await this.deps.db.update(repositories).set({ isActive: false, updatedAt: now })
-        .where(and(eq(repositories.githubOrganizationId, inst.id), seen.length ? notInArray(repositories.id, seen) : undefined));
+      const accessible = new Set(repos.map((r) => r.id));
+      const lost = [...known.values()].filter((r) => !accessible.has(r.githubRepoId)).map((r) => r.id);
+      if (lost.length) await this.deps.db.update(repositories).set({ isActive: false, updatedAt: now }).where(inArray(repositories.id, lost));
       for (const { row, data } of rows) {
         if (input.repositoryId && row.id !== input.repositoryId) continue;
-        if (!row.isActive) continue;
-        const [last] = await this.deps.db.select({ at: max(githubIssues.updatedAt) }).from(githubIssues).where(eq(githubIssues.repositoryId, row.id));
-        const since = last?.at ? new Date(new Date(last.at).getTime() - 60_000) : undefined;
-        const issues = await this.deps.github.listRepositoryIssues(inst.installationId, data.owner, data.name, since);
-        for (const i of issues) await upsertIssue(this.deps.db, row.id, i, now);
-        issuesSynced += issues.length;
+        issuesSynced += await this.syncIssues(inst.installationId, row, data, now);
       }
     }
     return { installations: installs.length, repositoriesSynced: reposSynced, issuesSynced, syncedAt: iso(now) };
+  }
+
+  /** Imports (incrementally) the issues of one active repository. */
+  private async syncIssues(installationId: string, row: typeof repositories.$inferSelect, data: GitHubRepositoryData, now: Date) {
+    if (!row.isActive) return 0;
+    const [last] = await this.deps.db.select({ at: max(githubIssues.updatedAt) }).from(githubIssues).where(eq(githubIssues.repositoryId, row.id));
+    const since = last?.at ? new Date(new Date(last.at).getTime() - 60_000) : undefined;
+    const issues = await this.deps.github.listRepositoryIssues(installationId, data.owner, data.name, since);
+    for (const i of issues) await upsertIssue(this.deps.db, row.id, i, now);
+    return issues.length;
+  }
+
+  /** Repositories the organization's installations can access, flagged with whether each is already connected. */
+  async availableRepositories(organizationId: string) {
+    this.requireConfigured();
+    const installs = await this.installationsFor(organizationId);
+    const out = [];
+    for (const inst of installs) {
+      const [accessible, details, connectedRows] = await Promise.all([
+        this.deps.github.listInstallationRepositories(inst.installationId),
+        this.deps.github.getInstallation(inst.installationId),
+        this.deps.db.select().from(repositories).where(eq(repositories.githubOrganizationId, inst.id)),
+      ]);
+      const connected = new Set(connectedRows.filter((r) => r.isActive).map((r) => r.githubRepoId));
+      const login = encodeURIComponent(inst.login);
+      out.push({
+        id: inst.id, installationId: inst.installationId, login: inst.login,
+        repositorySelection: details.repositorySelection,
+        // Where the account owner grants the app access to more repositories.
+        manageUrl: details.account.type === "Organization"
+          ? `https://github.com/organizations/${login}/settings/installations/${inst.installationId}`
+          : `https://github.com/settings/installations/${inst.installationId}`,
+        repositories: accessible.map((r) => ({
+          githubRepoId: r.id, name: r.name, fullName: r.fullName, url: r.url, private: r.private, archived: r.archived,
+          connected: connected.has(r.id),
+        })).sort((a, b) => a.fullName.localeCompare(b.fullName)),
+      });
+    }
+    return { installations: out };
+  }
+
+  /** Connects the selected repositories (from the org's own installations) and imports their issues. */
+  async connectRepositories(organizationId: string, body: unknown) {
+    this.requireConfigured();
+    const { githubRepoIds } = parse(connectRepositoriesSchema, body);
+    const installs = await this.installationsFor(organizationId);
+    if (installs.length === 0) throw conflict("GITHUB_NOT_LINKED", "Link a GitHub App installation first");
+    const wanted = new Set(githubRepoIds);
+    const now = this.deps.now();
+    const connected: { id: string; fullName: string }[] = [];
+    let issuesSynced = 0;
+    for (const inst of installs) {
+      const accessible = (await this.deps.github.listInstallationRepositories(inst.installationId)).filter((r) => wanted.has(r.id));
+      for (const data of accessible) {
+        if (data.archived) throw badRequest("GITHUB_REPOSITORY_ARCHIVED", `${data.fullName} is archived and cannot be connected`);
+        const row = await upsertRepository(this.deps.db, inst.id, data, now);
+        const [active] = await this.deps.db.update(repositories).set({ isActive: true, updatedAt: now }).where(eq(repositories.id, row.id)).returning();
+        connected.push({ id: row.id, fullName: row.fullName });
+        wanted.delete(data.id);
+        issuesSynced += await this.syncIssues(inst.installationId, active!, data, now);
+      }
+    }
+    if (wanted.size) throw badRequest("GITHUB_REPOSITORY_NOT_ACCESSIBLE", "Some repositories are not accessible to this organization's GitHub App installation");
+    return { connected, issuesSynced, syncedAt: iso(now) };
+  }
+
+  private async ownRepository(organizationId: string, repositoryId: string) {
+    if (!z.uuid().safeParse(repositoryId).success) throw notFound("Repository");
+    const [row] = await this.deps.db.select({ r: repositories }).from(repositories)
+      .innerJoin(githubOrganizations, eq(githubOrganizations.id, repositories.githubOrganizationId))
+      .where(and(eq(repositories.id, repositoryId), eq(githubOrganizations.organizationId, organizationId))).limit(1);
+    if (!row) throw notFound("Repository");
+    return row.r;
+  }
+
+  async updateRepository(organizationId: string, repositoryId: string, body: unknown) {
+    const input = parse(updateRepositorySchema, body);
+    const repo = await this.ownRepository(organizationId, repositoryId);
+    const [row] = await this.deps.db.update(repositories).set({ ...input, updatedAt: this.deps.now() }).where(eq(repositories.id, repo.id)).returning();
+    return { id: row!.id, fullName: row!.fullName, defaultBranch: row!.defaultBranch, isActive: row!.isActive, updatedAt: iso(row!.updatedAt) };
+  }
+
+  /** Disconnects a repository and its imported issues. Refused while challenges are based on its issues. */
+  async removeRepository(organizationId: string, repositoryId: string) {
+    const repo = await this.ownRepository(organizationId, repositoryId);
+    const [{ used } = { used: 0 }] = await this.deps.db.select({ used: count() }).from(challenges)
+      .innerJoin(githubIssues, eq(githubIssues.id, challenges.githubIssueId)).where(eq(githubIssues.repositoryId, repo.id));
+    if (Number(used) > 0) {
+      throw conflict("GITHUB_REPOSITORY_IN_USE", `${Number(used)} challenge(s) are based on issues from this repository; disable syncing instead of removing it`);
+    }
+    await this.deps.db.delete(repositories).where(eq(repositories.id, repo.id));
+    return { removed: true, id: repo.id };
   }
 
   async overview(organizationId: string) {

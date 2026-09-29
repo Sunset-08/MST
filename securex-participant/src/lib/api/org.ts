@@ -4,7 +4,7 @@
 // ============================================================
 
 import type { PaginatedResponse } from '@/lib/types';
-import { apiGet, apiPost, apiPut, toQuery } from './client';
+import { apiDelete, apiGet, apiPost, apiPut, toQuery } from './client';
 
 export interface OrgSummary {
   id: string;
@@ -82,7 +82,17 @@ export interface OrgSubmissionRow extends OrgActivityRow {
 export interface OrgGithubOverview {
   configured: boolean;
   installations: { id: string; installationId: string; login: string; name: string }[];
-  repositories: { id: string; fullName: string; name: string; url: string; isActive: boolean; issueCount: number; openIssueCount: number }[];
+  repositories: { id: string; fullName: string; name: string; url: string; defaultBranch: string; isActive: boolean; issueCount: number; openIssueCount: number }[];
+}
+
+export interface OrgGithubAvailableInstallation {
+  id: string;
+  installationId: string;
+  login: string;
+  repositorySelection: string | null;
+  /** Where the GitHub account owner grants the app access to more repositories. */
+  manageUrl: string;
+  repositories: { githubRepoId: string; name: string; fullName: string; url: string; private: boolean; archived: boolean; connected: boolean }[];
 }
 
 export interface OrgGithubIssue {
@@ -129,7 +139,15 @@ export const getOrgGithub = () => apiGet<OrgGithubOverview>('/org/github', { org
 export const getGithubInstallUrl = () => apiGet<{ installUrl: string; appSlug: string }>('/org/github/install-url', { org: true });
 export const linkGithubInstallation = (installationId: string, state?: string) =>
   apiPost<{ login: string; installationId: string }>('/org/github/installations', { installationId, state }, { org: true });
-export const syncOrgGithub = () =>
-  apiPost<{ repositoriesSynced: number; issuesSynced: number; syncedAt: string }>('/org/github/sync', {}, { org: true });
+/** `importAll` is for the first import right after linking; a plain sync only refreshes connected repositories. */
+export const syncOrgGithub = (importAll = false) =>
+  apiPost<{ repositoriesSynced: number; issuesSynced: number; syncedAt: string }>('/org/github/sync', importAll ? { importAll: true } : {}, { org: true });
+export const getAvailableGithubRepos = () =>
+  apiGet<{ installations: OrgGithubAvailableInstallation[] }>('/org/github/repositories/available', { org: true });
+export const connectGithubRepos = (githubRepoIds: string[]) =>
+  apiPost<{ connected: { id: string; fullName: string }[]; issuesSynced: number }>('/org/github/repositories', { githubRepoIds }, { org: true });
+export const updateGithubRepo = (id: string, patch: { isActive?: boolean; defaultBranch?: string }) =>
+  apiPut<{ id: string; isActive: boolean; defaultBranch: string }>(`/org/github/repositories/${id}`, patch, { org: true });
+export const removeGithubRepo = (id: string) => apiDelete<{ removed: boolean }>(`/org/github/repositories/${id}`, { org: true });
 export const listOrgGithubIssues = (params: { repositoryId?: string; state?: string; search?: string; limit?: number } = {}) =>
   apiGet<PaginatedResponse<OrgGithubIssue>>(`/org/github/issues${toQuery(params)}`, { org: true });

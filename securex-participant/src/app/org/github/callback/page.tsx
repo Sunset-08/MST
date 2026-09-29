@@ -38,7 +38,7 @@ function Callback() {
       try {
         const linked = await linkGithubInstallation(installationId, state);
         setMessage(`Linked ${linked.login}. Fetching repositories and issues…`);
-        const synced = await syncOrgGithub();
+        const synced = await syncOrgGithub(true);
         setMessage(`Connected. Synced ${synced.repositoriesSynced} repositories and ${synced.issuesSynced} issues.`);
         setDone(true);
         setTimeout(() => router.replace('/org/settings'), 1800);

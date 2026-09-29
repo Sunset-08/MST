@@ -71,7 +71,9 @@ async function main() {
     id: "165914364", account: { id: "77", login: "VishwasSharma28", type: "User", name: "Vishwas", htmlUrl: "https://github.com/VishwasSharma28" },
     repositorySelection: "selected", permissions: { issues: "read", metadata: "read" }, createdAt: new Date().toISOString(), suspendedAt: null,
   });
-  github.repos.set("165914364", [{ id: "1", name: "test-MST", fullName: "VishwasSharma28/test-MST", owner: "VishwasSharma28", url: "https://github.com/VishwasSharma28/test-MST", defaultBranch: "main", archived: false, private: false }]);
+  const e2eRepo = (id: string, name: string, isPrivate = false) => ({ id, name, fullName: `VishwasSharma28/${name}`, owner: "VishwasSharma28", url: `https://github.com/VishwasSharma28/${name}`, defaultBranch: "main", archived: false, private: isPrivate });
+  github.repos.set("165914364", [e2eRepo("1", "test-MST"), e2eRepo("2", "payments-api"), e2eRepo("3", "wallet-sdk", true)]);
+  github.issues.set("VishwasSharma28/payments-api", [{ id: "9002", number: 7, title: "Webhook signature not verified", body: "details", author: "reporter", url: "https://github.com/VishwasSharma28/payments-api/issues/7", state: "open", labels: ["security"], createdAt: "2026-08-01T00:00:00Z", updatedAt: "2026-08-02T00:00:00Z" }]);
   github.issues.set("VishwasSharma28/test-MST", [
     { id: "501", number: 1, title: "Signer key committed to repo", body: "A signing key was found in history.", author: "VishwasSharma28", url: "https://github.com/VishwasSharma28/test-MST/issues/1", state: "open", labels: ["security"], createdAt: "2026-09-01T00:00:00Z", updatedAt: "2026-09-02T00:00:00Z" },
   ]);

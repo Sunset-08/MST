@@ -48,8 +48,11 @@ export function draftToPayload(draft: ChallengeDraft, status: 'published' | 'dra
   const questions = draft.questions.map((q) => ({
     id: q.id,
     type: q.type,
-    questionText: q.questionText,
-    ...(q.type === 'multiple_choice' ? { options: q.options, correctAnswer: q.correctAnswer } : {}),
+    questionText: q.questionText.trim(),
+    // Unused (blank) option slots are not sent: the API requires every option to have text.
+    ...(q.type === 'multiple_choice'
+      ? { options: (q.options ?? []).map((o) => ({ ...o, text: o.text.trim() })).filter((o) => o.text), correctAnswer: q.correctAnswer }
+      : {}),
     points: q.points,
   }));
   const acceptedAnswers = Object.fromEntries(

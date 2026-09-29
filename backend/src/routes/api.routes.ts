@@ -81,6 +81,10 @@ export function createOrgDashboardRouter({ services, authenticate, limiters }: R
   r.get("/github/install-url", admin, c.githubInstallUrl);
   r.post("/github/installations", admin, limiters.write, c.githubLink);
   r.post("/github/sync", admin, limiters.write, c.githubSync);
+  r.get("/github/repositories/available", admin, c.githubAvailable);
+  r.post("/github/repositories", admin, limiters.write, c.githubConnectRepos);
+  r.put("/github/repositories/:id", admin, limiters.write, c.githubUpdateRepo);
+  r.delete("/github/repositories/:id", admin, limiters.write, c.githubRemoveRepo);
   r.get("/github/issues", c.githubIssues);
   return r;
 }

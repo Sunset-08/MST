@@ -34,6 +34,10 @@ export function createOrganizationController(s: Services) {
     githubInstallUrl: handler(async (req, res) => ok(res, await s.github.installUrl(ctx(req).organizationId, req.securexUser!.id))),
     githubLink: handler(async (req, res) => ok(res, await s.github.linkInstallation(ctx(req).organizationId, req.securexUser!, req.body), 201)),
     githubSync: handler(async (req, res) => ok(res, await s.github.sync(ctx(req).organizationId, req.body))),
+    githubAvailable: handler(async (req, res) => ok(res, await s.github.availableRepositories(ctx(req).organizationId))),
+    githubConnectRepos: handler(async (req, res) => ok(res, await s.github.connectRepositories(ctx(req).organizationId, req.body), 201)),
+    githubUpdateRepo: handler(async (req, res) => ok(res, await s.github.updateRepository(ctx(req).organizationId, param(req.params.id), req.body))),
+    githubRemoveRepo: handler(async (req, res) => ok(res, await s.github.removeRepository(ctx(req).organizationId, param(req.params.id)))),
     githubIssues: handler(async (req, res) => ok(res, await s.github.listIssues(ctx(req).organizationId, req.query))),
   };
 }
