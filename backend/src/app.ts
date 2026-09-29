@@ -36,7 +36,10 @@ export function createApp(deps: AppDependencies): { app: Express; services: Serv
   const limiters = createRateLimiters(deps.rateLimit ?? true);
   const app = express();
   app.disable("x-powered-by");
-  app.set("trust proxy", deps.config.isProduction ? 1 : false);
+  // One trusted proxy hop in production and on Render (which sets RENDER=true); override with TRUST_PROXY.
+  const trustProxy = process.env.TRUST_PROXY;
+  const behindProxy = deps.config.isProduction || process.env.RENDER === "true";
+  app.set("trust proxy", trustProxy ? (/^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy === "false" ? false : trustProxy) : behindProxy ? 1 : false);
   app.use(securityHeaders);
   app.use(cors({
     origin: deps.config.corsOrigins === "*" ? true : deps.config.corsOrigins,
