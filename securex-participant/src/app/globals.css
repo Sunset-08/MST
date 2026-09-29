@@ -2,25 +2,25 @@
 @import "tailwindcss";
 
 /* ============================================================
-   SECUREX — Design System
-   Dark Security Platform — LeetCode + HackerRank + Web3
+   DevArena — Design System
+   Cyberpunk Security Platform — Gamified + Web3
    ============================================================ */
 
 :root {
   /* Brand */
   --sx-bg-base: #0a0e1a;
-  --sx-bg-surface: #0f1524;
-  --sx-bg-card: #131a2e;
-  --sx-bg-elevated: #1a2440;
-  --sx-bg-hover: #1f2d4d;
+  --sx-bg-surface: rgba(15, 21, 36, 0.45);
+  --sx-bg-card: rgba(19, 26, 46, 0.4);
+  --sx-bg-elevated: rgba(26, 36, 64, 0.5);
+  --sx-bg-hover: rgba(31, 45, 77, 0.7);
 
-  --sx-border: rgba(255, 255, 255, 0.06);
-  --sx-border-strong: rgba(255, 255, 255, 0.12);
+  --sx-border: rgba(255, 255, 255, 0.03);
+  --sx-border-strong: rgba(255, 255, 255, 0.08);
 
-  /* Accent */
-  --sx-accent: #3b82f6;          /* primary blue */
-  --sx-accent-glow: rgba(59, 130, 246, 0.15);
-  --sx-accent-2: #06b6d4;        /* cyan */
+  /* Accent — DevArena neon cyan + magenta */
+  --sx-accent: #00d4ff;          /* neon cyan */
+  --sx-accent-glow: rgba(0, 212, 255, 0.15);
+  --sx-accent-2: #b400ff;        /* neon magenta */
   --sx-accent-3: #8b5cf6;        /* violet */
 
   /* Difficulty */
@@ -494,6 +494,8 @@ code, pre, kbd {
 
 .sx-sidebar {
   background: var(--sx-bg-surface);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border-right: 1px solid var(--sx-border);
   width: 240px;
   min-height: 100vh;

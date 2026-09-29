@@ -70,7 +70,7 @@ export default function AdminDashboardPage() {
         <div>
           <h1 className="text-2xl font-bold text-white">Platform Overview</h1>
           <p className="text-slate-500 text-sm mt-1">
-            Real-time stats across the entire SECUREX platform
+            Real-time stats across the entire DevArena platform
           </p>
         </div>
 

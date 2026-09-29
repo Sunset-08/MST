@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
@@ -8,7 +9,6 @@ import {
   User,
   Target,
   Gift,
-  ShieldCheck,
   LogOut,
   ChevronRight,
   Zap,
@@ -16,6 +16,8 @@ import {
 import { useParticipant } from '@/lib/context/ParticipantContext';
 import { formatPoints } from '@/lib/utils';
 import { getLevelFromPoints } from '@/lib/constants/levels';
+import { authLogout } from '@/lib/api/auth';
+import { useRouter } from 'next/navigation';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -29,6 +31,12 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
   const pathname = usePathname();
   const { participant, totalPoints } = useParticipant();
   const levelInfo = getLevelFromPoints(totalPoints);
+  const router = useRouter();
+
+  async function handleSignOut() {
+    await authLogout();
+    router.push('/auth/login');
+  }
 
   return (
     <>
@@ -42,15 +50,16 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
 
       <aside className={`sx-sidebar ${isOpen ? 'open' : ''}`}>
         {/* Logo */}
-        <div className="p-6 border-b border-white/5">
-          <Link href="/dashboard" className="flex items-center gap-2 group">
-            <div className="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center group-hover:bg-blue-500/30 transition-colors">
-              <ShieldCheck size={18} className="text-blue-400" />
-            </div>
-            <div>
-              <span className="text-white font-bold text-lg tracking-tight">SECURE</span>
-              <span className="text-blue-400 font-bold text-lg">X</span>
-            </div>
+        <div className="p-5 border-b border-white/5">
+          <Link href="/dashboard" className="flex items-center group">
+            <Image
+              src="/devarena-logo.jpg"
+              alt="DevArena"
+              width={130}
+              height={34}
+              className="object-contain transition-opacity group-hover:opacity-90"
+              style={{ filter: 'brightness(1.05)' }}
+            />
           </Link>
         </div>
 
@@ -58,7 +67,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
         {participant && (
           <div className="p-4 mx-3 my-3 rounded-xl bg-[var(--sx-bg-elevated)] border border-white/5">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-violet-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
                 {participant.displayName?.[0] ?? participant.username[0].toUpperCase()}
               </div>
               <div className="min-w-0">
@@ -100,10 +109,13 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
 
         {/* Bottom */}
         <div className="p-3 border-t border-white/5">
-          <Link href="/auth/login" className="sx-sidebar-link">
+          <button
+            onClick={handleSignOut}
+            className="sx-sidebar-link w-full text-left"
+          >
             <LogOut size={18} />
             <span>Sign Out</span>
-          </Link>
+          </button>
         </div>
       </aside>
     </>

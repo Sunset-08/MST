@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Menu, Bell, Flame, Zap, Trophy } from 'lucide-react';
 import { useParticipant } from '@/lib/context/ParticipantContext';
 import { WalletButton } from '@/components/participant/wallet/WalletButton';
@@ -23,6 +24,20 @@ export function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
         >
           <Menu size={20} />
         </button>
+
+        {/* Mobile logo (shown when sidebar is hidden) */}
+        <div className="md:hidden">
+          <Link href="/dashboard">
+            <Image
+              src="/devarena-logo.jpg"
+              alt="DevArena"
+              width={110}
+              height={28}
+              className="object-contain"
+              style={{ filter: 'brightness(1.05)' }}
+            />
+          </Link>
+        </div>
 
         {/* Quick stats row (desktop) */}
         {participant && (
@@ -59,12 +74,12 @@ export function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
           aria-label="Notifications"
         >
           <Bell size={18} />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-blue-500 rounded-full" />
+          <span className="absolute top-1 right-1 w-2 h-2 bg-cyan-500 rounded-full" />
         </button>
 
         {participant && (
           <Link href="/profile" id="profile-avatar-link">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-violet-500 flex items-center justify-center text-white font-bold text-sm cursor-pointer hover:ring-2 hover:ring-blue-500/50 transition-all">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-bold text-sm cursor-pointer hover:ring-2 hover:ring-cyan-500/50 transition-all">
               {(participant.displayName?.[0] ?? participant.username[0]).toUpperCase()}
             </div>
           </Link>

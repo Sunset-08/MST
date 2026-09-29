@@ -33,17 +33,13 @@ const ORG_NAV = [
 
 function OrgSidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) {
   const pathname = usePathname();
-  const { admin, organization, mstStatus, logout } = useOrg();
+  const { admin, organization, logout } = useOrg();
   const router = useRouter();
 
   const handleLogout = () => {
     logout();
     router.push('/org/auth/login');
   };
-
-  const isMstSatisfied =
-    mstStatus?.paymentStatus === 'PAYMENT_CONFIRMED' ||
-    mstStatus?.paymentStatus === 'READY_TO_PUBLISH';
 
   return (
     <>
@@ -59,15 +55,19 @@ function OrgSidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => voi
         style={{ borderRight: '1px solid rgba(139, 92, 246, 0.15)' }}
       >
         {/* Logo */}
-        <div className="p-6 border-b border-white/5">
+        <div className="p-5 border-b border-white/5">
           <Link href="/org/dashboard" className="flex items-center gap-2 group">
             <div className="w-8 h-8 rounded-lg bg-violet-500/20 border border-violet-500/30 flex items-center justify-center group-hover:bg-violet-500/30 transition-colors">
               <Building2 size={16} className="text-violet-400" />
             </div>
-            <div>
-              <span className="text-white font-bold text-lg tracking-tight">SECURE</span>
-              <span className="text-violet-400 font-bold text-lg">X</span>
-              <span className="text-slate-500 text-xs font-normal ml-1.5">Org</span>
+            <div className="flex items-center gap-1.5">
+              <img
+                src="/devarena-logo.jpg"
+                alt="DevArena"
+                className="h-6 object-contain"
+                style={{ filter: 'brightness(1.05)' }}
+              />
+              <span className="text-slate-500 text-xs font-normal">Org</span>
             </div>
           </Link>
         </div>
@@ -85,16 +85,6 @@ function OrgSidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => voi
               </div>
             </div>
 
-            {/* MST status indicator */}
-            <div className="mt-3 flex items-center gap-2">
-              <div
-                className="w-2 h-2 rounded-full flex-shrink-0"
-                style={{ background: isMstSatisfied ? '#34d399' : '#fbbf24' }}
-              />
-              <span className="text-xs" style={{ color: isMstSatisfied ? '#34d399' : '#fbbf24' }}>
-                {isMstSatisfied ? 'MST Funded' : 'MST Required'}
-              </span>
-            </div>
           </div>
         )}
 
@@ -102,8 +92,6 @@ function OrgSidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => voi
         <nav className="flex-1 px-3 py-2 space-y-1">
           {ORG_NAV.map(({ href, label, icon: Icon }) => {
             const isActive = pathname === href || pathname.startsWith(href + '/');
-            const isCreateChallenge = href === '/org/challenges/create';
-            const isLocked = isCreateChallenge; // Always accessible but shows lock if MST not met
 
             return (
               <Link
@@ -125,30 +113,7 @@ function OrgSidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => voi
           })}
         </nav>
 
-        {/* MST Quick Status */}
-        {mstStatus && (
-          <div className="mx-3 mb-3">
-            <div
-              className="rounded-xl p-3 border"
-              style={{
-                background: isMstSatisfied ? 'rgba(52, 211, 153, 0.05)' : 'rgba(251, 191, 36, 0.05)',
-                borderColor: isMstSatisfied ? 'rgba(52, 211, 153, 0.2)' : 'rgba(251, 191, 36, 0.2)',
-              }}
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <Wallet size={13} style={{ color: isMstSatisfied ? '#34d399' : '#fbbf24' }} />
-                <span className="text-xs font-semibold" style={{ color: isMstSatisfied ? '#34d399' : '#fbbf24' }}>
-                  MST Funding
-                </span>
-              </div>
-              <div className="text-xs text-slate-500">
-                <span className="text-white font-bold">{mstStatus.amountPaid}</span>
-                <span className="mx-1">/</span>
-                <span>{mstStatus.minimumRequired} MSTC</span>
-              </div>
-            </div>
-          </div>
-        )}
+
 
         {/* Bottom */}
         <div className="p-3 border-t border-white/5">

@@ -48,12 +48,14 @@ export default function OrgLoginPage() {
       <div className="w-full max-w-md relative z-10">
         {/* Branding */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-violet-500/15 border border-violet-500/25 mb-4 glow-violet">
-            <Building2 size={30} className="text-violet-400" />
+          <div className="flex justify-center mb-4">
+            <img
+              src="/devarena-logo.jpg"
+              alt="DevArena"
+              className="h-10 object-contain"
+              style={{ filter: 'brightness(1.05)' }}
+            />
           </div>
-          <h1 className="text-4xl font-black text-white mb-1">
-            SECURE<span className="text-violet-400">X</span>
-          </h1>
           <p className="text-slate-500 text-sm">Organization / Admin Portal</p>
         </div>
 

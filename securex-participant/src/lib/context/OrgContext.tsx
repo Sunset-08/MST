@@ -25,10 +25,11 @@ import React, {
 import type {
   OrgAdmin,
   Organization,
-  OrgMstStatus,
+  OrgWallet,
   ChallengeDraft,
 } from '@/lib/types/org';
 import { createEmptyDraft } from '@/lib/types/org';
+import { authLogin, authLogout } from '@/lib/api/auth';
 
 // ----------------------------------------------------------
 // Mock: platform-configurable minimum MST requirement
@@ -47,14 +48,7 @@ const MOCK_ORG: Organization = {
   slug: 'acmecorp-security',
   description: 'Security-first software company specializing in Web3 infrastructure.',
   website: 'https://acmecorp.example.com',
-  mstStatus: {
-    minimumRequired: PLATFORM_MIN_MST_REQUIREMENT,
-    amountPaid: 0,
-    paymentStatus: 'PAYMENT_REQUIRED',
-    walletAddress: undefined,
-    transactionHash: undefined,
-    lastUpdatedAt: new Date().toISOString(),
-  },
+  wallet: undefined,
   createdAt: '2025-06-01T10:00:00Z',
 };
 
@@ -74,7 +68,7 @@ const MOCK_ORG_ADMIN: OrgAdmin = {
 interface OrgContextValue {
   admin: OrgAdmin | null;
   organization: Organization | null;
-  mstStatus: OrgMstStatus | null;
+  wallet: OrgWallet | null;
   isLoading: boolean;
   isLoggedIn: boolean;
 
@@ -82,9 +76,9 @@ interface OrgContextValue {
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
 
-  // MST Actions (UI triggers only — actual tx owned by Member 4)
-  initiatePayment: (walletAddress: string) => Promise<void>;
-  refreshMstStatus: () => Promise<void>;
+  // Wallet Actions (UI triggers only — actual tx owned by Member 4)
+  connectWallet: (walletAddress: string) => Promise<void>;
+  disconnectWallet: () => void;
 
   // Challenge Draft
   draft: ChallengeDraft;
@@ -101,7 +95,7 @@ const OrgContext = createContext<OrgContextValue | null>(null);
 
 export function OrgProvider({ children }: { children: React.ReactNode }) {
   const [admin, setAdmin] = useState<OrgAdmin | null>(null);
-  const [mstStatus, setMstStatus] = useState<OrgMstStatus | null>(null);
+  const [wallet, setWallet] = useState<OrgWallet | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [draft, setDraft] = useState<ChallengeDraft>(createEmptyDraft());
 
@@ -112,7 +106,7 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
       try {
         const parsed = JSON.parse(stored) as OrgAdmin;
         setAdmin(parsed);
-        setMstStatus(parsed.organization.mstStatus);
+        setWallet(parsed.organization.wallet || null);
       } catch {
         localStorage.removeItem('sx_org_session');
       }
@@ -123,79 +117,57 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
   // Auth
   // ----------------------------------------------------------
 
-  const login = useCallback(async (email: string, _password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 900)); // simulate API round-trip
-
-    // TODO: Member 3 — replace with real NextAuth org-credentials provider
-    // For now: any @org email uses mock admin
-    if (!email.includes('@')) {
+    try {
+      const res = await authLogin(email, password);
+      // For now, any successful login from the org portal maps them to the mock organization.
+      // (Backend does not currently return organization mapping).
+      const session = { ...MOCK_ORG_ADMIN, email: res.user.email, id: res.user.id, displayName: res.user.displayName };
+      setAdmin(session);
+      setWallet(session.organization.wallet || null);
+      localStorage.setItem('sx_org_session', JSON.stringify(session));
+    } catch (err) {
+      throw err;
+    } finally {
       setIsLoading(false);
-      throw new Error('Invalid email');
     }
-
-    const session = { ...MOCK_ORG_ADMIN, email };
-    setAdmin(session);
-    setMstStatus(session.organization.mstStatus);
-    localStorage.setItem('sx_org_session', JSON.stringify(session));
-    setIsLoading(false);
   }, []);
 
   const logout = useCallback(() => {
     setAdmin(null);
-    setMstStatus(null);
+    setWallet(null);
     localStorage.removeItem('sx_org_session');
+    authLogout();
   }, []);
 
   // ----------------------------------------------------------
-  // MST Status
-  // Member 2 only displays state returned from backend/Member 4.
-  // initiatePayment just sets state to PENDING_PAYMENT so the
-  // UI can show "Awaiting confirmation" — the actual blockchain
-  // transaction is Member 4's responsibility.
+  // Wallet Connection
   // ----------------------------------------------------------
 
-  const initiatePayment = useCallback(async (walletAddress: string) => {
+  const connectWallet = useCallback(async (walletAddress: string) => {
     setIsLoading(true);
     await new Promise((r) => setTimeout(r, 800));
 
-    setMstStatus((prev) =>
-      prev
-        ? {
-            ...prev,
-            walletAddress,
-            paymentStatus: 'PAYMENT_PROCESSING',
-            lastUpdatedAt: new Date().toISOString(),
-          }
-        : prev,
-    );
+    const newWallet: OrgWallet = {
+      address: walletAddress,
+      isConnected: true,
+      network: 'Testnet',
+    };
 
-    // Simulate backend confirming payment after a delay
-    // In production: Member 4 webhook updates this status
-    setTimeout(() => {
-      setMstStatus((prev) => {
-        if (!prev) return prev;
-        const confirmed: OrgMstStatus = {
-          ...prev,
-          amountPaid: prev.minimumRequired,
-          paymentStatus: 'PAYMENT_CONFIRMED',
-          transactionHash: '0xdemo' + Math.random().toString(16).slice(2, 18),
-          lastUpdatedAt: new Date().toISOString(),
-        };
-        // Persist into local admin copy
-        setAdmin((a) =>
-          a ? { ...a, organization: { ...a.organization, mstStatus: confirmed } } : a,
-        );
-        return confirmed;
-      });
-    }, 3500);
+    setWallet(newWallet);
+    setAdmin((a) =>
+      a ? { ...a, organization: { ...a.organization, wallet: newWallet } } : a,
+    );
 
     setIsLoading(false);
   }, []);
 
-  const refreshMstStatus = useCallback(async () => {
-    // TODO: Poll backend for updated MST status from Member 4 webhook
-    await new Promise((r) => setTimeout(r, 400));
+  const disconnectWallet = useCallback(() => {
+    setWallet(null);
+    setAdmin((a) =>
+      a ? { ...a, organization: { ...a.organization, wallet: undefined } } : a,
+    );
   }, []);
 
   // ----------------------------------------------------------
@@ -236,13 +208,13 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
       value={{
         admin,
         organization,
-        mstStatus,
+        wallet,
         isLoading,
         isLoggedIn,
         login,
         logout,
-        initiatePayment,
-        refreshMstStatus,
+        connectWallet,
+        disconnectWallet,
         draft,
         updateDraft,
         resetDraft,

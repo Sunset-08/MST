@@ -3,10 +3,10 @@ import './globals.css';
 import { Providers } from '@/components/Providers';
 
 export const metadata: Metadata = {
-  title: 'SECUREX — Security Challenge Platform',
+  title: 'DevArena — Security Challenge Platform',
   description:
     'Earn Points and MST rewards by solving real-world security challenges. The gamified Web3 security platform for developers and researchers.',
-  keywords: ['security', 'challenges', 'web3', 'blockchain', 'CTF', 'bug bounty', 'points'],
+  keywords: ['security', 'challenges', 'web3', 'blockchain', 'CTF', 'bug bounty', 'points', 'DevArena'],
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

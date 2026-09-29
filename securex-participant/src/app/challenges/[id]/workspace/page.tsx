@@ -360,7 +360,7 @@ export default function ChallengeWorkspacePage({
 
           <div className="flex items-center justify-between pt-2 border-t border-white/5 flex-wrap gap-3">
             <p className="text-xs text-slate-600">
-              By submitting, you agree that your solution will be verified by the SECUREX backend engine.
+              By submitting, you agree that your solution will be verified by the DevArena backend engine.
             </p>
             <button
               id="submit-solution-btn"

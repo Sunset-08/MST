@@ -147,7 +147,7 @@ export default function RewardsPage() {
         <div className="sx-card p-4 bg-blue-400/3">
           <p className="text-xs text-slate-500">
             <strong className="text-blue-400">Integration Note:</strong> On-chain MSTC transfers are processed by the 
-            SECUREX smart contract (Member 4). Transaction hashes are provided by the backend after reward confirmation.
+            DevArena smart contract (Member 4). Transaction hashes are provided by the backend after reward confirmation.
             The frontend displays reward status from{' '}
             <code className="text-slate-400 font-mono">GET /rewards</code>.
           </p>

@@ -8,6 +8,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { ShieldCheck, GitBranch, Mail, Lock, User, ArrowRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { authRegister } from '@/lib/api/auth';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -24,11 +25,19 @@ export default function SignupPage() {
     setLoading(true);
     setError('');
     try {
-      // TODO: Member 3 — connect sign-up API
-      await new Promise((r) => setTimeout(r, 800));
-      router.push('/auth/onboarding');
-    } catch {
-      setError('Registration failed. Please try again.');
+      const result = await authRegister(
+        form.email,
+        form.password,
+        form.username,
+        form.username, // displayName defaults to username; user can update in profile
+      );
+      if (result.emailConfirmationRequired) {
+        router.push('/auth/onboarding?confirm=true');
+      } else {
+        router.push('/dashboard');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -42,10 +51,14 @@ export default function SignupPage() {
 
       <div className="w-full max-w-md relative z-10">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-500/15 border border-blue-500/25 mb-4">
-            <ShieldCheck size={28} className="text-blue-400" />
+          <div className="flex justify-center mb-4">
+            <img
+              src="/devarena-logo.jpg"
+              alt="DevArena"
+              className="h-10 object-contain"
+              style={{ filter: 'brightness(1.05)' }}
+            />
           </div>
-          <h1 className="text-3xl font-black text-white">Join SECURE<span className="text-blue-400">X</span></h1>
           <p className="text-slate-500 text-sm mt-1">Start your security journey today</p>
         </div>
 

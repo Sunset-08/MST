@@ -60,7 +60,7 @@ export default function AdminLoginPage() {
           <div>
             <h2 className="text-xl font-bold text-white">Admin Sign In</h2>
             <p className="text-sm text-slate-500 mt-1">
-              Access the SECUREX platform management console
+              Access the DevArena platform management console
             </p>
           </div>
 
@@ -69,7 +69,7 @@ export default function AdminLoginPage() {
             style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)' }}>
             <ShieldCheck size={16} className="text-amber-400 mt-0.5 flex-shrink-0" />
             <p className="text-xs text-amber-300/80">
-              This portal is restricted to <strong>SECUREX platform administrators</strong> only.
+              This portal is restricted to <strong>DevArena platform administrators</strong> only.
               Unauthorized access attempts are logged.
             </p>
           </div>

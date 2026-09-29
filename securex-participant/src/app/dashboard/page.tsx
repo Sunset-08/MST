@@ -1,7 +1,8 @@
 'use client';
 
 // ============================================================
-// SECUREX — Dashboard Page
+// DevArena — Participant Dashboard
+// Background: Image 2 (lofi security workstation) via AppShell
 // ============================================================
 
 import { AppShell } from '@/components/layout/AppShell';
@@ -10,7 +11,7 @@ import { LevelProgress } from '@/components/participant/gamification/LevelProgre
 import { ActivityCalendar } from '@/components/participant/streak/ActivityCalendar';
 import { ChallengeCard } from '@/components/participant/challenges/ChallengeCard';
 import { formatPoints, DIFFICULTY_COLORS } from '@/lib/utils';
-import { Zap, Flame, Trophy, Shield, TrendingUp, Clock, CheckCircle } from 'lucide-react';
+import { Zap, Flame, Trophy, Shield, TrendingUp, Clock, CheckCircle, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { MOCK_CHALLENGES, MOCK_CHALLENGE_HISTORY } from '@/lib/api/mock/data';
 import type { Difficulty } from '@/lib/types';
@@ -26,9 +27,9 @@ export default function DashboardPage() {
 
   if (isLoading) {
     return (
-      <AppShell>
+      <AppShell withBg>
         <div className="flex items-center justify-center min-h-64">
-          <div className="w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
         </div>
       </AppShell>
     );
@@ -36,7 +37,7 @@ export default function DashboardPage() {
 
   if (error || !participant || !stats) {
     return (
-      <AppShell>
+      <AppShell withBg>
         <div className="max-w-md mx-auto text-center py-20 space-y-4">
           <div className="w-16 h-16 rounded-2xl bg-rose-400/10 border border-rose-400/20 flex items-center justify-center mx-auto">
             <Trophy size={28} className="text-rose-400" />
@@ -58,27 +59,88 @@ export default function DashboardPage() {
   }
 
   return (
-    <AppShell>
+    <AppShell withBg>
       <div className="max-w-7xl mx-auto space-y-8">
-        {/* Welcome */}
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-white">
-              Welcome back, <span className="gradient-text">{participant.displayName ?? participant.username}</span> 👋
-            </h1>
-            <p className="text-slate-500 text-sm mt-1">
-              Keep solving challenges to climb the leaderboard
-            </p>
+
+        {/* ── Hero Welcome Banner ── */}
+        <div
+          className="relative rounded-2xl overflow-hidden p-8 md:p-10"
+          style={{
+            background: 'rgba(8,12,30,0.4)',
+            border: '1px solid rgba(0,212,255,0.08)',
+            backdropFilter: 'blur(12px)',
+            boxShadow: '0 0 60px rgba(0,212,255,0.03)',
+          }}
+        >
+          {/* Neon accent line */}
+          <div
+            className="absolute top-0 left-0 right-0 h-0.5"
+            style={{ background: 'linear-gradient(90deg, #00d4ff, #b400ff, transparent)' }}
+          />
+
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+            <div className="space-y-3">
+              <p
+                className="text-xs font-bold tracking-[0.25em] uppercase"
+                style={{ color: '#00d4ff' }}
+              >
+                // PARTICIPANT DASHBOARD
+              </p>
+              <h1 className="text-3xl md:text-4xl font-black text-white leading-tight">
+                WELCOME BACK,{' '}
+                <span style={{ color: '#00d4ff' }}>
+                  {(participant.displayName ?? participant.username).toUpperCase()}
+                </span>
+              </h1>
+              <p className="text-lg font-semibold text-slate-300">
+                SECURE YOUR NEXT CHALLENGE.
+              </p>
+              <p className="text-slate-500 text-sm max-w-md leading-relaxed">
+                Solve real security issues. Build reputation. Climb the leaderboard.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 flex-wrap">
+              <Link
+                href="/challenges"
+                id="dashboard-explore-btn"
+                className="flex items-center gap-2 px-5 py-3 font-bold text-sm uppercase tracking-widest transition-all duration-200"
+                style={{
+                  background: 'linear-gradient(135deg, #00d4ff 0%, #0099cc 100%)',
+                  color: '#000',
+                  clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px))',
+                }}
+              >
+                EXPLORE CHALLENGES
+                <ArrowRight size={15} />
+              </Link>
+              <Link
+                href="/leaderboard"
+                id="dashboard-leaderboard-btn"
+                className="flex items-center gap-2 px-5 py-3 font-bold text-sm uppercase tracking-widest transition-all duration-200"
+                style={{
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  color: '#e2e8f0',
+                }}
+              >
+                VIEW LEADERBOARD
+              </Link>
+            </div>
           </div>
-          <Link href="/challenges" id="dashboard-explore-btn" className="sx-btn sx-btn-primary hidden sm:flex">
-            Explore Challenges
-          </Link>
         </div>
 
-        {/* Stats cards */}
+        {/* ── Stats Cards ── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Points */}
-          <div className="sx-card p-5 space-y-2 glow-blue">
+          <div
+            className="p-5 space-y-2 rounded-xl"
+            style={{
+              background: 'rgba(8,12,30,0.4)',
+              border: '1px solid rgba(0,212,255,0.08)',
+              backdropFilter: 'blur(12px)',
+            }}
+          >
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-amber-400/10 flex items-center justify-center">
                 <Zap size={16} className="text-amber-400" />
@@ -92,31 +154,52 @@ export default function DashboardPage() {
           </div>
 
           {/* Streak */}
-          <div className="sx-card p-5 space-y-2">
+          <div
+            className="p-5 space-y-2 rounded-xl"
+            style={{
+              background: 'rgba(8,12,30,0.4)',
+              border: '1px solid rgba(255,166,0,0.08)',
+              backdropFilter: 'blur(12px)',
+            }}
+          >
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-orange-400/10 flex items-center justify-center">
                 <Flame size={16} className="text-orange-400" />
               </div>
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Streak</span>
             </div>
-            <p className="text-3xl font-black text-orange-400">{stats.streak.current}</p>
-            <p className="text-xs text-slate-600">Day streak 🔥</p>
+            <p className="text-3xl font-black text-orange-400">🔥 {stats.streak.current}</p>
+            <p className="text-xs text-slate-600">Day streak</p>
           </div>
 
           {/* Rank */}
-          <div className="sx-card p-5 space-y-2">
+          <div
+            className="p-5 space-y-2 rounded-xl"
+            style={{
+              background: 'rgba(8,12,30,0.4)',
+              border: '1px solid rgba(139,92,246,0.08)',
+              backdropFilter: 'blur(12px)',
+            }}
+          >
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-violet-400/10 flex items-center justify-center">
                 <Trophy size={16} className="text-violet-400" />
               </div>
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Rank</span>
             </div>
-            <p className="text-3xl font-black text-violet-400">#{participant.globalRank}</p>
+            <p className="text-3xl font-black text-violet-400">🏆 #{participant.globalRank}</p>
             <p className="text-xs text-slate-600">Global rank</p>
           </div>
 
           {/* Reputation */}
-          <div className="sx-card p-5 space-y-2">
+          <div
+            className="p-5 space-y-2 rounded-xl"
+            style={{
+              background: 'rgba(8,12,30,0.4)',
+              border: '1px solid rgba(0,212,255,0.08)',
+              backdropFilter: 'blur(12px)',
+            }}
+          >
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-cyan-400/10 flex items-center justify-center">
                 <Shield size={16} className="text-cyan-400" />
@@ -139,10 +222,10 @@ export default function DashboardPage() {
           <div className="lg:col-span-2 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                <TrendingUp size={18} className="text-blue-400" />
+                <TrendingUp size={18} style={{ color: '#00d4ff' }} />
                 Available Challenges
               </h2>
-              <Link href="/challenges" className="text-sm text-blue-400 hover:text-blue-300 transition-colors">
+              <Link href="/challenges" className="text-sm transition-colors" style={{ color: '#00d4ff' }}>
                 View all →
               </Link>
             </div>
@@ -189,7 +272,7 @@ export default function DashboardPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-slate-400">Current Streak</span>
-                  <span className="font-bold text-orange-400">{stats.streak.current} days</span>
+                  <span className="font-bold text-orange-400">🔥 {stats.streak.current} days</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-slate-400">Longest Streak</span>

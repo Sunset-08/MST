@@ -60,7 +60,7 @@ export default function AdminUsersPage() {
             <h1 className="text-2xl font-bold text-white flex items-center gap-3">
               <Users size={22} className="text-blue-400" /> Users
             </h1>
-            <p className="text-slate-500 text-sm mt-1">All registered SECUREX users</p>
+            <p className="text-slate-500 text-sm mt-1">All registered DevArena users</p>
           </div>
           <span className="sx-badge bg-white/5 border border-white/10 text-slate-400">
             {filtered.length} users

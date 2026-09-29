@@ -7,8 +7,9 @@
 // ============================================================
 
 import { OrgShell } from '@/components/org/OrgShell';
+import { OrgWalletCard } from '@/components/org/OrgWalletCard';
 import { useOrg } from '@/lib/context/OrgContext';
-import { Settings, Building2, User } from 'lucide-react';
+import { Settings, Building2, User, Wallet } from 'lucide-react';
 
 export default function OrgSettingsPage() {
   const { admin, organization } = useOrg();
@@ -99,6 +100,15 @@ export default function OrgSettingsPage() {
               />
             </div>
           </div>
+        </div>
+
+        {/* Wallet Settings */}
+        <div className="space-y-4">
+          <h2 className="text-base font-bold text-white flex items-center gap-2 px-1">
+            <Wallet size={16} className="text-violet-400" />
+            Wallet
+          </h2>
+          <OrgWalletCard />
         </div>
 
         <div

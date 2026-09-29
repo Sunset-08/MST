@@ -55,7 +55,7 @@ export default function AdminOrganizationsPage() {
             <h1 className="text-2xl font-bold text-white flex items-center gap-3">
               <Building2 size={22} className="text-violet-400" /> Organizations
             </h1>
-            <p className="text-slate-500 text-sm mt-1">All SECUREX registered organizations</p>
+            <p className="text-slate-500 text-sm mt-1">All DevArena registered organizations</p>
           </div>
           <span className="sx-badge bg-white/5 border border-white/10 text-slate-400">{filtered.length} orgs</span>
         </div>

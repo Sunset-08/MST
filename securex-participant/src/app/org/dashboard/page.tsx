@@ -7,7 +7,7 @@
 // ============================================================
 
 import { OrgShell } from '@/components/org/OrgShell';
-import { OrgMstStatusCard } from '@/components/org/OrgMstStatusCard';
+import { OrgWalletCard } from '@/components/org/OrgWalletCard';
 import { useOrg } from '@/lib/context/OrgContext';
 import Link from 'next/link';
 import {
@@ -21,6 +21,7 @@ import {
   Shield,
   AlertTriangle,
   CheckCircle2,
+  Wallet,
 } from 'lucide-react';
 
 // Mock challenges for the org dashboard
@@ -86,11 +87,7 @@ function OrgStatCard({
 }
 
 export default function OrgDashboardPage() {
-  const { organization, admin, mstStatus } = useOrg();
-
-  const isMstSatisfied =
-    mstStatus?.paymentStatus === 'PAYMENT_CONFIRMED' ||
-    mstStatus?.paymentStatus === 'READY_TO_PUBLISH';
+  const { organization, admin, wallet } = useOrg();
 
   if (!organization || !admin) return null;
 
@@ -122,64 +119,22 @@ export default function OrgDashboardPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            {isMstSatisfied ? (
-              <Link
-                href="/org/challenges/create"
-                id="org-create-challenge-btn"
-                className="sx-btn"
-                style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)', color: 'white' }}
-              >
-                <PlusCircle size={16} />
-                Create Challenge
-              </Link>
-            ) : (
-              <button
-                disabled
-                title="Minimum MST funding is required before publishing a challenge."
-                className="sx-btn relative"
-                style={{
-                  background: 'rgba(255,255,255,0.04)',
-                  color: 'var(--sx-text-muted)',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  cursor: 'not-allowed',
-                }}
-              >
-                <Lock size={14} />
-                Create Challenge
-                <span className="text-base leading-none">🔒</span>
-              </button>
-            )}
+            <Link
+              href="/org/challenges/create"
+              id="org-create-challenge-btn"
+              className="sx-btn"
+              style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)', color: 'white' }}
+            >
+              <PlusCircle size={16} />
+              Create Challenge
+            </Link>
           </div>
         </div>
 
-        {/* MST Alert banner (when not satisfied) */}
-        {!isMstSatisfied && (
-          <div
-            className="flex items-start gap-4 px-5 py-4 rounded-xl"
-            style={{ background: 'rgba(251, 191, 36, 0.06)', border: '1px solid rgba(251, 191, 36, 0.2)' }}
-          >
-            <AlertTriangle size={20} className="text-amber-400 flex-shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-amber-300">MST Funding Required</p>
-              <p className="text-xs text-amber-400/70 mt-0.5">
-                Your organization must deposit a minimum of{' '}
-                <strong>{mstStatus?.minimumRequired ?? 10} MSTC</strong> before publishing any
-                security challenges. Complete the deposit below.
-              </p>
-            </div>
-            <a
-              href="#mst-status-section"
-              className="sx-btn sx-btn-sm flex-shrink-0"
-              style={{ background: 'rgba(251, 191, 36, 0.15)', color: '#fbbf24', border: '1px solid rgba(251, 191, 36, 0.3)' }}
-            >
-              Fund Now
-              <ArrowRight size={13} />
-            </a>
-          </div>
-        )}
+
 
         {/* Stats row */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <OrgStatCard
             label="Published"
             value={publishedCount}
@@ -197,12 +152,6 @@ export default function OrgDashboardPage() {
             value={totalAttempts}
             icon={<Users size={16} />}
             color="#a78bfa"
-          />
-          <OrgStatCard
-            label="MST Deposited"
-            value={`${mstStatus?.amountPaid ?? 0} MSTC`}
-            icon={<TrendingUp size={16} />}
-            color="#f59e0b"
           />
         </div>
 
@@ -232,7 +181,7 @@ export default function OrgDashboardPage() {
                 <Shield size={36} className="text-slate-600 mx-auto mb-3" />
                 <p className="text-slate-500">No challenges yet.</p>
                 <p className="text-xs text-slate-600 mt-1">
-                  Create your first security challenge once MST funding is confirmed.
+                  Create your first security challenge.
                 </p>
               </div>
             ) : (
@@ -288,37 +237,25 @@ export default function OrgDashboardPage() {
                   Configure a real-world security issue for participants to solve.
                 </p>
               </div>
-              {isMstSatisfied ? (
-                <Link
-                  href="/org/challenges/create"
-                  id="org-dashboard-create-btn"
-                  className="sx-btn sx-btn-sm flex-shrink-0"
-                  style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)', color: 'white' }}
-                >
-                  <PlusCircle size={14} />
-                  Create
-                </Link>
-              ) : (
-                <button
-                  disabled
-                  className="sx-btn sx-btn-sm flex-shrink-0"
-                  style={{ background: 'rgba(255,255,255,0.04)', color: 'var(--sx-text-muted)', cursor: 'not-allowed' }}
-                  title="MST funding required"
-                >
-                  <Lock size={13} />
-                  Create 🔒
-                </button>
-              )}
+              <Link
+                href="/org/challenges/create"
+                id="org-dashboard-create-btn"
+                className="sx-btn sx-btn-sm flex-shrink-0"
+                style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)', color: 'white' }}
+              >
+                <PlusCircle size={14} />
+                Create
+              </Link>
             </div>
           </div>
 
-          {/* MST status sidebar */}
+          {/* Wallet Setup sidebar */}
           <div id="mst-status-section" className="space-y-4">
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <Activity size={18} className="text-amber-400" />
-              Organization Setup
+              <Wallet size={18} className="text-violet-400" />
+              Organization Wallet
             </h2>
-            <OrgMstStatusCard />
+            <OrgWalletCard />
           </div>
         </div>
       </div>

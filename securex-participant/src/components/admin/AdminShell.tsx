@@ -69,11 +69,14 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center">
             <ShieldCheck size={16} className="text-amber-400" />
           </div>
-          <div>
-            <span className="text-base font-black text-white">
-              SECURE<span className="text-amber-400">X</span>
-            </span>
-            <p className="text-[10px] text-amber-400/70 font-bold tracking-widest uppercase">
+          <div className="flex flex-col justify-center">
+            <img
+              src="/devarena-logo.jpg"
+              alt="DevArena"
+              className="h-5 object-contain"
+              style={{ filter: 'brightness(1.05)' }}
+            />
+            <p className="text-[10px] text-amber-400/70 font-bold tracking-widest uppercase mt-0.5">
               Platform Admin
             </p>
           </div>
@@ -177,7 +180,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           {/* Breadcrumb */}
           <div className="flex items-center gap-2 flex-1">
             <span className="text-xs text-slate-600 uppercase tracking-widest font-bold hidden sm:block">
-              SECUREX Admin
+              DevArena Admin
             </span>
             <ChevronRight size={12} className="text-slate-700 hidden sm:block" />
             <span className="text-sm font-semibold text-white capitalize">

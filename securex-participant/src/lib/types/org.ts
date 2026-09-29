@@ -4,34 +4,13 @@
 // ============================================================
 
 // ----------------------------------------------------------
-// MST Payment States (provided by Member 4 / backend)
-// Member 2 only displays these states — no blockchain logic here
+// Organization Wallet Status
 // ----------------------------------------------------------
 
-export type OrgMstPaymentStatus =
-  | 'PENDING_PAYMENT'
-  | 'PAYMENT_REQUIRED'
-  | 'PAYMENT_PROCESSING'
-  | 'PAYMENT_CONFIRMED'
-  | 'READY_TO_PUBLISH';
-
-// ----------------------------------------------------------
-// Organization MST Funding Status
-// ----------------------------------------------------------
-
-export interface OrgMstStatus {
-  /** Minimum MSTC required to publish challenges (configured by platform admin) */
-  minimumRequired: number;
-  /** Amount already paid/deposited by the organization */
-  amountPaid: number;
-  /** Current lifecycle state */
-  paymentStatus: OrgMstPaymentStatus;
-  /** Organization's registered wallet address */
-  walletAddress?: string;
-  /** Last deposit transaction hash (if any) */
-  transactionHash?: string;
-  /** Timestamp of last payment update */
-  lastUpdatedAt?: string;
+export interface OrgWallet {
+  address: string;
+  isConnected: boolean;
+  network?: string;
 }
 
 // ----------------------------------------------------------
@@ -45,7 +24,7 @@ export interface Organization {
   description?: string;
   logoUrl?: string;
   website?: string;
-  mstStatus: OrgMstStatus;
+  wallet?: OrgWallet;
   createdAt: string;
 }
 
@@ -144,13 +123,11 @@ export interface ChallengeDraft {
 
 export interface PublishValidationResult {
   isValid: boolean;
-  isMstSatisfied: boolean;
   missingFields: string[];
 }
 
 export function validateChallengeDraft(
   draft: ChallengeDraft,
-  mstStatus: OrgMstStatus,
 ): PublishValidationResult {
   const missing: string[] = [];
 
@@ -166,15 +143,8 @@ export function validateChallengeDraft(
   if (draft.mstReward === '' || Number(draft.mstReward) <= 0) missing.push('MST reward');
   if (!draft.githubRepository.trim()) missing.push('GitHub repository');
 
-  const isMstSatisfied =
-    mstStatus.paymentStatus === 'PAYMENT_CONFIRMED' ||
-    mstStatus.paymentStatus === 'READY_TO_PUBLISH';
-
-  if (!isMstSatisfied) missing.push('MST funding requirement');
-
   return {
     isValid: missing.length === 0,
-    isMstSatisfied,
     missingFields: missing,
   };
 }

@@ -11,5 +11,7 @@ export async function getLeaderboard(
 ): Promise<LeaderboardEntry[]> {
   if (USE_MOCK) return MOCK_LEADERBOARD;
   const period = filters?.period ?? 'global';
-  return apiGet(`/leaderboard?period=${period}`);
+  // Backend returns an array of entries (unwrapped by apiGet envelope handler)
+  return apiGet<LeaderboardEntry[]>(`/leaderboard?period=${period}`);
 }
+

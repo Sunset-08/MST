@@ -12,7 +12,7 @@ export default function AdminSettingsPage() {
             <Settings size={22} className="text-slate-400" /> Platform Settings
           </h1>
           <p className="text-slate-500 text-sm mt-1">
-            Global SECUREX platform configuration — managed by platform administrators
+            Global DevArena platform configuration — managed by platform administrators
           </p>
         </div>
 

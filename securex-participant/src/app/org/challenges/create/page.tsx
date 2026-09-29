@@ -11,7 +11,6 @@ import { useRouter } from 'next/navigation';
 import { OrgShell } from '@/components/org/OrgShell';
 import { QuestionBuilder } from '@/components/org/QuestionBuilder';
 import { PublishGate } from '@/components/org/PublishGate';
-import { OrgMstStatusCard } from '@/components/org/OrgMstStatusCard';
 import { useOrg } from '@/lib/context/OrgContext';
 import { validateChallengeDraft } from '@/lib/types/org';
 import {
@@ -165,17 +164,11 @@ const SECURITY_CATEGORY_OPTIONS = [
 
 export default function CreateChallengePage() {
   const router = useRouter();
-  const { draft, updateDraft, mstStatus, publishChallenge } = useOrg();
+  const { draft, updateDraft, publishChallenge } = useOrg();
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishSuccess, setPublishSuccess] = useState<string | null>(null);
 
-  const isMstSatisfied =
-    mstStatus?.paymentStatus === 'PAYMENT_CONFIRMED' ||
-    mstStatus?.paymentStatus === 'READY_TO_PUBLISH';
-
-  const validation = mstStatus
-    ? validateChallengeDraft(draft, mstStatus)
-    : { isValid: false, isMstSatisfied: false, missingFields: ['MST status unavailable'] };
+  const validation = validateChallengeDraft(draft);
 
   async function handlePublish() {
     if (!validation.isValid) return;
@@ -224,23 +217,7 @@ export default function CreateChallengePage() {
           </p>
         </div>
 
-        {/* MST gate banner */}
-        {!isMstSatisfied && (
-          <div
-            className="flex items-start gap-4 px-5 py-4 rounded-xl"
-            style={{ background: 'rgba(251, 191, 36, 0.06)', border: '1px solid rgba(251, 191, 36, 0.2)' }}
-          >
-            <AlertTriangle size={20} className="text-amber-400 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-semibold text-amber-300">MST Funding Required</p>
-              <p className="text-xs text-amber-400/70 mt-0.5">
-                You can configure your challenge now, but publishing is locked until your
-                organization deposits at least{' '}
-                <strong>{mstStatus?.minimumRequired ?? 10} MSTC</strong>.
-              </p>
-            </div>
-          </div>
-        )}
+
 
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Main form — left 2/3 */}
@@ -467,14 +444,7 @@ export default function CreateChallengePage() {
               isPublishing={isPublishing}
             />
 
-            {/* MST Status */}
-            <div className="space-y-2">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Clock size={15} className="text-amber-400" />
-                MST Status
-              </h3>
-              <OrgMstStatusCard />
-            </div>
+
 
             {/* Challenge flow steps */}
             <div className="sx-card p-5 space-y-4">
@@ -482,7 +452,6 @@ export default function CreateChallengePage() {
               <ol className="space-y-3 text-xs text-slate-500">
                 {[
                   ['Org Login', true],
-                  ['MST Requirement Satisfied', isMstSatisfied],
                   ['Create Challenge', true],
                   ['Add Valid Questions', draft.questions.length > 0],
                   ['Configure Verification', !!draft.verificationType],

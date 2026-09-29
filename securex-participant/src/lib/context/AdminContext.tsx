@@ -19,6 +19,7 @@ import React, {
   useCallback,
 } from 'react';
 import type { AdminUser } from '@/lib/types/admin';
+import { authLogin, authLogout } from '@/lib/api/auth';
 
 // ----------------------------------------------------------
 // Mock admin user
@@ -69,26 +70,34 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const login = useCallback(async (email: string, _password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 800)); // simulate API
-
-    // TODO: Member 3 — replace with: signIn('admin-credentials', { email, password })
-    // and verify role === 'admin' from the returned session token
-    if (!email.includes('@')) {
+    try {
+      const res = await authLogin(email, password);
+      if (res.user.role !== 'platform_admin') {
+        // Must clear the token that authLogin just set, since they aren't an admin
+        await authLogout();
+        throw new Error('Unauthorized: Platform Admin access required.');
+      }
+      const session: AdminUser = {
+        id: res.user.id,
+        username: res.user.username,
+        displayName: res.user.displayName,
+        email: res.user.email,
+        role: 'admin', // maps platform_admin to 'admin' for frontend compatibility
+        createdAt: res.user.createdAt,
+      };
+      setAdmin(session);
+      localStorage.setItem('sx_admin_session', JSON.stringify(session));
+    } finally {
       setIsLoading(false);
-      throw new Error('Invalid email address');
     }
-
-    const session: AdminUser = { ...MOCK_ADMIN, email };
-    setAdmin(session);
-    localStorage.setItem('sx_admin_session', JSON.stringify(session));
-    setIsLoading(false);
   }, []);
 
   const logout = useCallback(() => {
     setAdmin(null);
     localStorage.removeItem('sx_admin_session');
+    authLogout();
   }, []);
 
   return (

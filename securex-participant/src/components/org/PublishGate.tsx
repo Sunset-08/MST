@@ -18,7 +18,7 @@ interface PublishGateProps {
 }
 
 export function PublishGate({ validation, onPublish, isPublishing }: PublishGateProps) {
-  const { isValid, isMstSatisfied, missingFields } = validation;
+  const { isValid, missingFields } = validation;
 
   return (
     <div className="sx-card p-6 space-y-5">
@@ -72,7 +72,7 @@ export function PublishGate({ validation, onPublish, isPublishing }: PublishGate
           <p className="text-xs font-semibold text-emerald-400 uppercase tracking-wide mb-3">
             All requirements satisfied ✓
           </p>
-          {['MST funding', 'Challenge details', 'Questions', 'Verification criteria', 'Rewards configured'].map((item) => (
+          {['Challenge details', 'Questions', 'Verification criteria', 'Rewards configured'].map((item) => (
             <div key={item} className="flex items-center gap-2">
               <CheckCircle2 size={14} style={{ color: '#34d399' }} className="flex-shrink-0" />
               <span className="text-xs text-slate-400">{item}</span>
@@ -81,18 +81,7 @@ export function PublishGate({ validation, onPublish, isPublishing }: PublishGate
         </div>
       )}
 
-      {/* MST gate warning */}
-      {!isMstSatisfied && (
-        <div
-          className="flex items-center gap-3 px-4 py-3 rounded-lg text-xs"
-          style={{ background: 'rgba(251, 191, 36, 0.08)', border: '1px solid rgba(251, 191, 36, 0.2)' }}
-        >
-          <Lock size={14} className="text-amber-400 flex-shrink-0" />
-          <p className="text-amber-300">
-            Minimum MST funding is required before publishing a challenge.
-          </p>
-        </div>
-      )}
+
 
       {/* Publish button */}
       <button

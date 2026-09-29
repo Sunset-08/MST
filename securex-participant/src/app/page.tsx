@@ -1,15 +1,12 @@
 'use client';
 
 // ============================================================
-// SECUREX — Portal Selection (Root Entry Page)
-// The first page every unauthenticated user sees.
-// Authenticated users are redirected from their respective
-// login pages to the correct dashboard.
+// DevArena — Portal Selection (Root Entry Page)
 // ============================================================
 
 import Link from 'next/link';
+import Image from 'next/image';
 import {
-  ShieldCheck,
   User,
   Building2,
   Crown,
@@ -17,6 +14,7 @@ import {
   Zap,
   GitBranch,
   BarChart3,
+  ShieldCheck,
 } from 'lucide-react';
 
 const PORTALS = [
@@ -24,9 +22,9 @@ const PORTALS = [
     id: 'participant',
     icon: User,
     color: 'blue',
-    accent: '#3b82f6',
-    glow: 'rgba(59,130,246,0.12)',
-    border: 'rgba(59,130,246,0.25)',
+    accent: '#00d4ff',
+    glow: 'rgba(0,212,255,0.10)',
+    border: 'rgba(0,212,255,0.22)',
     label: 'PARTICIPANT',
     tagline: 'Compete. Solve. Earn.',
     description:
@@ -44,9 +42,9 @@ const PORTALS = [
     id: 'organization',
     icon: Building2,
     color: 'violet',
-    accent: '#7c3aed',
-    glow: 'rgba(124,58,237,0.12)',
-    border: 'rgba(124,58,237,0.25)',
+    accent: '#b400ff',
+    glow: 'rgba(180,0,255,0.10)',
+    border: 'rgba(180,0,255,0.22)',
     label: 'ORGANIZATION',
     tagline: 'Create. Configure. Manage.',
     description:
@@ -65,8 +63,8 @@ const PORTALS = [
     icon: Crown,
     color: 'amber',
     accent: '#f59e0b',
-    glow: 'rgba(245,158,11,0.10)',
-    border: 'rgba(245,158,11,0.25)',
+    glow: 'rgba(245,158,11,0.08)',
+    border: 'rgba(245,158,11,0.22)',
     label: 'ADMIN',
     tagline: 'Monitor. Manage. Operate.',
     description:
@@ -87,20 +85,35 @@ export default function PortalSelectionPage() {
     <div className="min-h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden">
       {/* Background */}
       <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/3 right-1/4 w-80 h-80 bg-violet-500/5 rounded-full blur-3xl" />
-        <div className="absolute top-2/3 right-1/3 w-64 h-64 bg-amber-500/4 rounded-full blur-3xl" />
+        <div
+          className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full"
+          style={{ background: 'radial-gradient(circle, rgba(0,212,255,0.05) 0%, transparent 70%)' }}
+        />
+        <div
+          className="absolute bottom-1/3 right-1/4 w-80 h-80 rounded-full"
+          style={{ background: 'radial-gradient(circle, rgba(180,0,255,0.04) 0%, transparent 70%)' }}
+        />
+        <div
+          className="absolute top-2/3 right-1/3 w-64 h-64 rounded-full"
+          style={{ background: 'radial-gradient(circle, rgba(245,158,11,0.03) 0%, transparent 70%)' }}
+        />
       </div>
 
       <div className="w-full max-w-6xl relative z-10 space-y-12">
         {/* Header */}
-        <div className="text-center space-y-4">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-500/15 border border-blue-500/20 mb-2">
-            <ShieldCheck size={32} className="text-blue-400" />
+        <div className="text-center space-y-5">
+          <div className="flex justify-center">
+            <Link href="/" className="inline-block">
+              <Image
+                src="/devarena-logo.jpg"
+                alt="DevArena"
+                width={220}
+                height={58}
+                className="object-contain"
+                style={{ filter: 'brightness(1.1)' }}
+              />
+            </Link>
           </div>
-          <h1 className="text-5xl lg:text-6xl font-black text-white tracking-tight">
-            SECURE<span className="text-blue-400">X</span>
-          </h1>
           <p className="text-slate-400 text-lg font-medium">
             Security challenges. Verified rewards. Blockchain-native.
           </p>
@@ -115,19 +128,28 @@ export default function PortalSelectionPage() {
               <div
                 key={portal.id}
                 id={`portal-card-${portal.id}`}
-                className="group relative flex flex-col rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1"
+                className="group relative flex flex-col transition-all duration-300 hover:-translate-y-1"
                 style={{
-                  background: 'rgba(15,20,40,0.7)',
+                  background: 'rgba(10, 14, 30, 0.80)',
                   backdropFilter: 'blur(16px)',
                   border: `1px solid ${portal.border}`,
                   boxShadow: `0 0 40px ${portal.glow}`,
+                  clipPath: 'polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px))',
                 }}
               >
+                {/* Top accent line */}
+                <div
+                  style={{
+                    height: '2px',
+                    background: `linear-gradient(90deg, ${portal.accent}, transparent)`,
+                  }}
+                />
+
                 {/* Badge */}
                 {portal.badge && (
                   <div
-                    className="absolute top-4 right-4 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-widest"
-                    style={{ background: `${portal.accent}20`, color: portal.accent, border: `1px solid ${portal.border}` }}
+                    className="absolute top-5 right-5 px-2 py-0.5 text-[10px] font-bold tracking-widest"
+                    style={{ background: `${portal.accent}18`, color: portal.accent, border: `1px solid ${portal.border}` }}
                   >
                     {portal.badge}
                   </div>
@@ -138,8 +160,8 @@ export default function PortalSelectionPage() {
                   {/* Icon + label */}
                   <div className="space-y-3">
                     <div
-                      className="w-12 h-12 rounded-xl flex items-center justify-center"
-                      style={{ background: `${portal.accent}18`, border: `1px solid ${portal.border}` }}
+                      className="w-12 h-12 flex items-center justify-center"
+                      style={{ background: `${portal.accent}15`, border: `1px solid ${portal.border}` }}
                     >
                       <Icon size={24} style={{ color: portal.accent }} />
                     </div>
@@ -173,9 +195,9 @@ export default function PortalSelectionPage() {
                   <Link
                     href={portal.href}
                     id={`portal-enter-${portal.id}`}
-                    className="flex items-center justify-between w-full px-5 py-3 rounded-xl font-semibold text-sm transition-all duration-200 group-hover:gap-3"
+                    className="flex items-center justify-between w-full px-5 py-3 font-semibold text-sm transition-all duration-200"
                     style={{
-                      background: `${portal.accent}15`,
+                      background: `${portal.accent}12`,
                       border: `1px solid ${portal.border}`,
                       color: portal.accent,
                     }}
@@ -183,7 +205,7 @@ export default function PortalSelectionPage() {
                       (e.currentTarget as HTMLElement).style.background = `${portal.accent}25`;
                     }}
                     onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLElement).style.background = `${portal.accent}15`;
+                      (e.currentTarget as HTMLElement).style.background = `${portal.accent}12`;
                     }}
                   >
                     <span>{portal.cta}</span>

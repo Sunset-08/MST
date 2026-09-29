@@ -46,10 +46,6 @@ const DIFFICULTY_STYLE: Record<string, { color: string; bg: string }> = {
 };
 
 export default function OrgChallengesPage() {
-  const { mstStatus } = useOrg();
-  const isMstSatisfied =
-    mstStatus?.paymentStatus === 'PAYMENT_CONFIRMED' ||
-    mstStatus?.paymentStatus === 'READY_TO_PUBLISH';
 
   return (
     <OrgShell>
@@ -61,26 +57,15 @@ export default function OrgChallengesPage() {
               {MOCK_ORG_CHALLENGES.length} challenge{MOCK_ORG_CHALLENGES.length !== 1 ? 's' : ''} configured
             </p>
           </div>
-          {isMstSatisfied ? (
-            <Link
-              href="/org/challenges/create"
-              id="org-challenges-create-btn"
-              className="sx-btn"
-              style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)', color: 'white' }}
-            >
-              <PlusCircle size={16} />
-              New Challenge
-            </Link>
-          ) : (
-            <button
-              disabled
-              className="sx-btn"
-              style={{ background: 'rgba(255,255,255,0.04)', color: 'var(--sx-text-muted)', cursor: 'not-allowed' }}
-            >
-              <Lock size={14} />
-              New Challenge 🔒
-            </button>
-          )}
+          <Link
+            href="/org/challenges/create"
+            id="org-challenges-create-btn"
+            className="sx-btn"
+            style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)', color: 'white' }}
+          >
+            <PlusCircle size={16} />
+            New Challenge
+          </Link>
         </div>
 
         <div className="space-y-3">
@@ -139,7 +124,7 @@ export default function OrgChallengesPage() {
             <Shield size={40} className="text-slate-600 mx-auto mb-4" />
             <p className="text-slate-500 font-medium">No challenges yet</p>
             <p className="text-xs text-slate-600 mt-1">
-              Create your first security challenge once MST funding is confirmed.
+              Create your first security challenge.
             </p>
           </div>
         )}

@@ -112,52 +112,54 @@ const MOCK_ANALYTICS: AdminAnalytics = {
 // API Functions
 // ----------------------------------------------------------
 
+import { apiGet } from '@/lib/api/client';
+
 const DELAY = () => new Promise((r) => setTimeout(r, 400));
+
+// Backend returns paginated wrapper: { data: T[], total, page, pageSize, hasMore }
+async function adminList<T>(path: string): Promise<T[]> {
+  const result = await apiGet<{ data: T[] } | T[]>(path);
+  return Array.isArray(result) ? result : (result as { data: T[] }).data;
+}
 
 export async function getAdminStats(): Promise<AdminDashboardStats> {
   if (USE_MOCK) { await DELAY(); return MOCK_STATS; }
-  const r = await fetch('/api/admin/dashboard');
-  return r.json();
+  return apiGet<AdminDashboardStats>('/admin/dashboard');
 }
 
 export async function getAdminUsers(): Promise<AdminUserEntry[]> {
   if (USE_MOCK) { await DELAY(); return MOCK_USERS; }
-  const r = await fetch('/api/admin/users');
-  return r.json();
+  return adminList<AdminUserEntry>('/admin/users');
 }
 
 export async function getAdminOrganizations(): Promise<AdminOrgEntry[]> {
   if (USE_MOCK) { await DELAY(); return MOCK_ORGS; }
-  const r = await fetch('/api/admin/organizations');
-  return r.json();
+  return adminList<AdminOrgEntry>('/admin/organizations');
 }
 
 export async function getAdminChallenges(): Promise<AdminChallengeEntry[]> {
   if (USE_MOCK) { await DELAY(); return MOCK_CHALLENGES; }
-  const r = await fetch('/api/admin/challenges');
-  return r.json();
+  return adminList<AdminChallengeEntry>('/admin/challenges');
 }
 
 export async function getAdminSubmissions(): Promise<AdminSubmissionEntry[]> {
   if (USE_MOCK) { await DELAY(); return MOCK_SUBMISSIONS; }
-  const r = await fetch('/api/admin/submissions');
-  return r.json();
+  return adminList<AdminSubmissionEntry>('/admin/submissions');
 }
 
 export async function getAdminRewards(): Promise<AdminRewardEntry[]> {
   if (USE_MOCK) { await DELAY(); return MOCK_REWARDS; }
-  const r = await fetch('/api/admin/rewards');
-  return r.json();
+  return adminList<AdminRewardEntry>('/admin/rewards');
 }
 
 export async function getAdminGithub(): Promise<AdminGithubEntry[]> {
   if (USE_MOCK) { await DELAY(); return MOCK_GITHUB; }
-  const r = await fetch('/api/admin/github');
-  return r.json();
+  const result = await apiGet<AdminGithubEntry[] | Record<string, unknown>>('/admin/github');
+  return Array.isArray(result) ? result : [];
 }
 
 export async function getAdminAnalytics(): Promise<AdminAnalytics> {
   if (USE_MOCK) { await DELAY(); return MOCK_ANALYTICS; }
-  const r = await fetch('/api/admin/analytics');
-  return r.json();
+  return apiGet<AdminAnalytics>('/admin/analytics');
 }
+
