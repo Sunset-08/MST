@@ -54,7 +54,7 @@ export class OctokitGitHubAppClient implements GitHubAppClient {
   constructor(private readonly config: AppConfig["github"]) {}
 
   isConfigured(): boolean {
-    return Boolean(this.config.appId && this.config.privateKeyPath);
+    return Boolean(this.config.appId && (this.config.privateKey || this.config.privateKeyPath));
   }
 
   /** Octokit is ESM-only; it is loaded on first use through a dynamic import. */
@@ -66,17 +66,21 @@ export class OctokitGitHubAppClient implements GitHubAppClient {
 
   private async createApp(): Promise<App> {
     const { appId, privateKeyPath, apiUrl, apiVersion } = this.config;
-    if (!appId || !privateKeyPath) {
-      throw unavailable("GITHUB_NOT_CONFIGURED", "GitHub App is not configured (GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY_PATH)");
+    if (!appId || !(this.config.privateKey || privateKeyPath)) {
+      throw unavailable("GITHUB_NOT_CONFIGURED", "GitHub App is not configured (GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY or GITHUB_APP_PRIVATE_KEY_PATH)");
     }
     let privateKey: string;
-    try {
-      privateKey = readFileSync(privateKeyPath, "utf8");
-    } catch {
-      throw unavailable("GITHUB_NOT_CONFIGURED", "GitHub App private key file could not be read");
+    if (this.config.privateKey) {
+      privateKey = this.config.privateKey;
+    } else {
+      try {
+        privateKey = readFileSync(privateKeyPath!, "utf8");
+      } catch {
+        throw unavailable("GITHUB_NOT_CONFIGURED", "GitHub App private key file could not be read");
+      }
     }
     if (!/-----BEGIN (RSA )?PRIVATE KEY-----/.test(privateKey)) {
-      throw unavailable("GITHUB_NOT_CONFIGURED", "GitHub App private key file is not a PEM private key");
+      throw unavailable("GITHUB_NOT_CONFIGURED", "GitHub App private key is not a PEM private key");
     }
     const { App: OctokitApp, Octokit } = await import("octokit");
     const Client = Octokit.defaults({

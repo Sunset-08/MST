@@ -36,6 +36,16 @@ describe("GitHub App configuration", () => {
     const bad = new OctokitGitHubAppClient({ ...loadConfig({}).github, appId: "5112750", privateKeyPath: join(dir, "bad.pem") });
     await assert.rejects(bad.getApp(), (e: any) => e.code === "GITHUB_NOT_CONFIGURED" && !String(e.message).includes("not a key"));
   });
+
+  test("an inline private key (hosts without a filesystem) is accepted, with \\n escapes expanded", async () => {
+    const pem = "-----BEGIN RSA PRIVATE KEY-----\\nabc\\n-----END RSA PRIVATE KEY-----";
+    const cfg = loadConfig({ GITHUB_APP_ID: "5112750", GITHUB_APP_PRIVATE_KEY: pem });
+    assert.equal(cfg.github.privateKey, "-----BEGIN RSA PRIVATE KEY-----\nabc\n-----END RSA PRIVATE KEY-----");
+    assert.equal(isGithubAppConfigured(cfg), true);
+    assert.equal(isGithubAppConfigured(loadConfig({ GITHUB_APP_PRIVATE_KEY: pem })), false);
+    const bad = new OctokitGitHubAppClient({ ...loadConfig({}).github, appId: "5112750", privateKey: "not a key" });
+    await assert.rejects(bad.getApp(), (e: any) => e.code === "GITHUB_NOT_CONFIGURED" && !String(e.message).includes("not a key"));
+  });
 });
 
 describe("GitHub organization flow", () => {

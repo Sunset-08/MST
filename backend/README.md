@@ -28,6 +28,7 @@ Production: `npm run build` then `npm start` (runs `dist/server.js`).
 | `APP_SIGNING_SECRET` | for wallets + GitHub install | HMAC key for wallet-link challenges and GitHub install state |
 | `GITHUB_APP_ID`, `GITHUB_APP_NAME` | for GitHub | `5112750`, `securexMST` |
 | `GITHUB_APP_PRIVATE_KEY_PATH` | for GitHub | Path to the App PEM key (keep under `backend/secrets/`, which is git-ignored) |
+| `GITHUB_APP_PRIVATE_KEY` | alternative | The PEM itself (literal `\n` allowed) for hosts without a filesystem, e.g. Render; takes precedence over the path |
 | `GITHUB_WEBHOOK_SECRET` | for webhooks | Webhook secret configured in the GitHub App |
 | `GITHUB_API_URL`, `GITHUB_API_VERSION` | no | Defaults `https://api.github.com`, `2022-11-28` |
 | `GITHUB_APP_CLIENT_ID` | for participant GitHub connection | GitHub App client ID (device flow; no secret) |

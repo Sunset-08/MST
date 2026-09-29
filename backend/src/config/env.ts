@@ -22,6 +22,8 @@ export interface AppConfig {
     clientId?: string;
     appName?: string;
     privateKeyPath?: string;
+    /** Inline PEM (hosts without a filesystem, e.g. Render); literal \n sequences are expanded. */
+    privateKey?: string;
     webhookSecret?: string;
     apiUrl: string;
     apiVersion: string;
@@ -67,6 +69,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       clientId: clean(env.GITHUB_APP_CLIENT_ID),
       appName: clean(env.GITHUB_APP_NAME),
       privateKeyPath: clean(env.GITHUB_APP_PRIVATE_KEY_PATH),
+      privateKey: clean(env.GITHUB_APP_PRIVATE_KEY)?.replace(/\\n/g, "\n"),
       webhookSecret: clean(env.GITHUB_WEBHOOK_SECRET),
       apiUrl: clean(env.GITHUB_API_URL) ?? "https://api.github.com",
       apiVersion: clean(env.GITHUB_API_VERSION) ?? "2022-11-28",
@@ -88,8 +91,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 }
 
 export function isGithubAppConfigured(config: AppConfig): boolean {
-  const { appId, privateKeyPath } = config.github;
-  return Boolean(appId && privateKeyPath && existsSync(privateKeyPath));
+  const { appId, privateKey, privateKeyPath } = config.github;
+  return Boolean(appId && (privateKey || (privateKeyPath && existsSync(privateKeyPath))));
 }
 
 /** Non-secret configuration state, safe to return from admin settings endpoints. */
@@ -102,7 +105,7 @@ export function safeConfigReport(config: AppConfig) {
       appName: config.github.appName ?? null,
       userConnectConfigured: Boolean(config.github.clientId && config.signingSecret),
       participantConnectionRequired: config.requireGithubConnection,
-      privateKeyConfigured: Boolean(config.github.privateKeyPath && existsSync(config.github.privateKeyPath)),
+      privateKeyConfigured: Boolean(config.github.privateKey || (config.github.privateKeyPath && existsSync(config.github.privateKeyPath))),
       webhookSecretConfigured: Boolean(config.github.webhookSecret),
       apiUrl: config.github.apiUrl,
       apiVersion: config.github.apiVersion,
