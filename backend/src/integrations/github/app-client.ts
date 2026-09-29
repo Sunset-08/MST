@@ -8,6 +8,7 @@ import type {
   GitHubAppInfo,
   GitHubInstallation,
   GitHubIssueData,
+  GitHubPullRequestData,
   GitHubRepositoryData,
 } from "./types.js";
 
@@ -149,6 +150,42 @@ export class OctokitGitHubAppClient implements GitHubAppClient {
         if (++page >= MAX_PAGES) break;
       }
       return repos;
+    });
+  }
+
+  /** Reads a pull request (and the files it changes) through the installation token; nothing is taken from the caller. */
+  getPullRequest(installationId: string, owner: string, repo: string, pullNumber: number): Promise<GitHubPullRequestData> {
+    return this.call(async () => {
+      const octokit = await (await this.getAppInstance()).getInstallationOctokit(Number(installationId));
+      const { data } = await octokit.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { owner, repo, pull_number: pullNumber });
+      const pr = data as unknown as AnyRecord;
+      const changedFiles: string[] = [];
+      let page = 0;
+      for await (const response of octokit.paginate.iterator("GET /repos/{owner}/{repo}/pulls/{pull_number}/files", { owner, repo, pull_number: pullNumber, per_page: 100 })) {
+        for (const f of response.data as unknown as AnyRecord[]) changedFiles.push(str(f.filename));
+        if (++page >= 3) break;
+      }
+      const base = (pr.base ?? {}) as AnyRecord;
+      const head = (pr.head ?? {}) as AnyRecord;
+      const baseRepo = (base.repo ?? {}) as AnyRecord;
+      const headRepo = (head.repo ?? null) as AnyRecord | null;
+      return {
+        number: Number(pr.number),
+        url: str(pr.html_url),
+        title: str(pr.title),
+        body: (pr.body as string | null | undefined) ?? null,
+        state: str(pr.state),
+        merged: Boolean(pr.merged),
+        author: str((pr.user as AnyRecord | undefined)?.login) || null,
+        createdAt: str(pr.created_at),
+        baseRepository: str(baseRepo.full_name),
+        baseRef: str(base.ref),
+        headRepository: headRepo ? str(headRepo.full_name) : null,
+        headRef: str(head.ref),
+        headSha: str(head.sha),
+        mergeCommitSha: (pr.merge_commit_sha as string | null | undefined) ?? null,
+        changedFiles,
+      };
     });
   }
 

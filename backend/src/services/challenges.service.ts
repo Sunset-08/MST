@@ -59,8 +59,8 @@ export class ChallengesService {
     return {
       challenge: challenges,
       organization: { id: organizations.id, name: organizations.name, slug: organizations.slug },
-      repo: { fullName: repositories.fullName, url: repositories.url },
-      issue: { number: githubIssues.issueNumber, url: githubIssues.url, state: githubIssues.state },
+      repo: { fullName: repositories.fullName, url: repositories.url, defaultBranch: repositories.defaultBranch },
+      issue: { number: githubIssues.issueNumber, url: githubIssues.url, state: githubIssues.state, title: githubIssues.title, body: githubIssues.body, labels: githubIssues.labels },
       attempts: attemptsCountSql,
       solved: solvedCountSql,
       participantStatus: participantStatusSql(userId),
@@ -88,6 +88,15 @@ export class ChallengesService {
       githubRepoUrl: row.repo?.url ?? undefined,
       githubIssueNumber: row.issue?.number ?? undefined,
       githubIssueUrl: row.issue?.url ?? undefined,
+      // Participants work against exactly this repository and issue; solutions are submitted as a pull request to it.
+      ...(detail && row.repo?.fullName ? {
+        githubDefaultBranch: row.repo.defaultBranch,
+        githubIssue: row.issue?.number ? {
+          number: row.issue.number, title: row.issue.title, body: row.issue.body, url: row.issue.url, state: row.issue.state, labels: row.issue.labels ?? [],
+        } : undefined,
+      } : {}),
+      ...(detail ? { securityIssue: pub.securityIssue, targetFiles: pub.targetFiles } : {}),
+      submissionMode: (c.challengeType === "code" || c.challengeType === "fix") ? (row.repo?.fullName ? "pull_request" : "patch") : undefined,
       attempts: Number(row.attempts),
       solved: Number(row.solved),
       tags: pub.tags,

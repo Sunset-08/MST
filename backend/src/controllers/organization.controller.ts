@@ -23,6 +23,7 @@ export function createOrganizationController(s: Services) {
     stats: handler(async (req, res) => ok(res, await s.org.stats(ctx(req).organizationId))),
     activity: handler(async (req, res) => ok(res, await s.org.activity(ctx(req).organizationId, req.query))),
     listChallenges: handler(async (req, res) => ok(res, await s.org.listChallenges(ctx(req).organizationId, ctx(req).role, req.query))),
+    getChallenge: handler(async (req, res) => ok(res, await s.org.getChallenge(ctx(req).organizationId, ctx(req).role, param(req.params.id)))),
     createChallenge: handler(async (req, res) => ok(res, await s.org.createChallenge(ctx(req).organizationId, ctx(req).role, req.body), 201)),
     updateChallenge: handler(async (req, res) =>
       ok(res, await s.org.updateChallenge(ctx(req).organizationId, ctx(req).role, param(req.params.id), req.body))),

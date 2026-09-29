@@ -10,6 +10,7 @@ import { badRequest, conflict, notFound, parse } from "../utils/http.js";
 import { CHALLENGE_TYPE_LABEL, DIFFICULTY_LABEL, fromLabel, SUBMISSION_STATUS_LABEL, type DbChallengeType, type DbDifficulty } from "../utils/labels.js";
 import { offsetOf, paginated, paginationSchema } from "../utils/pagination.js";
 import { DEFAULT_POINTS_BY_DIFFICULTY } from "./gamification.rules.js";
+import type { DbOrTx } from "../db/index.js";
 import type { ServiceDeps } from "./deps.js";
 
 const difficultySchema = z.string().trim().transform((v, ctx) => {
@@ -166,7 +167,10 @@ export class OrgService {
     }));
   }
 
-  private orgChallengeDto(c: typeof challenges.$inferSelect, role: OrgRole, counts?: { submissions: number; verified: number; attempts: number }) {
+  private orgChallengeDto(
+    c: typeof challenges.$inferSelect, role: OrgRole, counts?: { submissions: number; verified: number; attempts: number },
+    github?: { repositoryId: string | null; repository: string | null; issueNumber: number | null; issueTitle: string | null } | null,
+  ) {
     const full = ROLE_RANK[role] >= ROLE_RANK.admin;
     return {
       id: c.id,
@@ -181,6 +185,10 @@ export class OrgService {
       mstReward: c.mstReward,
       maxAttempts: c.maxAttempts,
       githubIssueId: c.githubIssueId,
+      githubRepositoryId: github?.repositoryId ?? null,
+      githubRepository: github?.repository ?? null,
+      githubIssueNumber: github?.issueNumber ?? null,
+      githubIssueTitle: github?.issueTitle ?? null,
       status: c.status,
       challengeConfig: full ? readConfig(c.challengeConfig) : publicConfig(c.challengeConfig),
       ...(counts ?? {}),
@@ -198,14 +206,35 @@ export class OrgService {
       submissions: sql<number>`(SELECT count(*)::int FROM ${submissions} s WHERE s.challenge_id = ${ref(challenges.id)})`,
       verified: sql<number>`(SELECT count(*)::int FROM ${submissions} s WHERE s.challenge_id = ${ref(challenges.id)} AND s.status = 'verified')`,
       attempts: sql<number>`(SELECT count(*)::int FROM ${challengeAttempts} a WHERE a.challenge_id = ${ref(challenges.id)})`,
-    }).from(challenges).where(where).orderBy(desc(challenges.createdAt)).limit(q.limit).offset(offsetOf(q));
+      github: { repositoryId: repositories.id, repository: repositories.fullName, issueNumber: githubIssues.issueNumber, issueTitle: githubIssues.title },
+    }).from(challenges)
+      .leftJoin(githubIssues, eq(githubIssues.id, challenges.githubIssueId))
+      .leftJoin(repositories, eq(repositories.id, githubIssues.repositoryId))
+      .where(where).orderBy(desc(challenges.createdAt)).limit(q.limit).offset(offsetOf(q));
     return paginated(rows.map((r) => this.orgChallengeDto(r.c, role, {
       submissions: Number(r.submissions), verified: Number(r.verified), attempts: Number(r.attempts),
-    })), Number(total), q);
+    }, r.github)), Number(total), q);
   }
 
-  private async assertIssueInOrg(organizationId: string, githubIssueId: string) {
-    const [row] = await this.deps.db.select({ id: githubIssues.id }).from(githubIssues)
+  /** One challenge of this organization (any status), with everything the edit form needs. */
+  async getChallenge(organizationId: string, role: OrgRole, challengeId: string) {
+    if (!z.uuid().safeParse(challengeId).success) throw notFound("Challenge");
+    const [row] = await this.deps.db.select({
+      c: challenges,
+      submissions: sql<number>`(SELECT count(*)::int FROM ${submissions} s WHERE s.challenge_id = ${ref(challenges.id)})`,
+      verified: sql<number>`(SELECT count(*)::int FROM ${submissions} s WHERE s.challenge_id = ${ref(challenges.id)} AND s.status = 'verified')`,
+      attempts: sql<number>`(SELECT count(*)::int FROM ${challengeAttempts} a WHERE a.challenge_id = ${ref(challenges.id)})`,
+      github: { repositoryId: repositories.id, repository: repositories.fullName, issueNumber: githubIssues.issueNumber, issueTitle: githubIssues.title },
+    }).from(challenges)
+      .leftJoin(githubIssues, eq(githubIssues.id, challenges.githubIssueId))
+      .leftJoin(repositories, eq(repositories.id, githubIssues.repositoryId))
+      .where(and(eq(challenges.id, challengeId), eq(challenges.organizationId, organizationId))).limit(1);
+    if (!row) throw notFound("Challenge");
+    return this.orgChallengeDto(row.c, role, { submissions: Number(row.submissions), verified: Number(row.verified), attempts: Number(row.attempts) }, row.github);
+  }
+
+  private async assertIssueInOrg(organizationId: string, githubIssueId: string, db: DbOrTx = this.deps.db) {
+    const [row] = await db.select({ id: githubIssues.id }).from(githubIssues)
       .innerJoin(repositories, eq(repositories.id, githubIssues.repositoryId))
       .innerJoin(githubOrganizations, eq(githubOrganizations.id, repositories.githubOrganizationId))
       .where(and(eq(githubIssues.id, githubIssueId), eq(githubOrganizations.organizationId, organizationId))).limit(1);
@@ -234,13 +263,13 @@ export class OrgService {
       createdAt: now,
       updatedAt: now,
     }).returning();
-    return this.orgChallengeDto(c!, role);
+    return this.getChallenge(organizationId, role, c!.id);
   }
 
   async updateChallenge(organizationId: string, role: OrgRole, challengeId: string, body: unknown) {
     if (!z.uuid().safeParse(challengeId).success) throw notFound("Challenge");
     const input = parse(updateChallengeSchema, body);
-    return this.deps.db.transaction(async (tx) => {
+    await this.deps.db.transaction(async (tx) => {
       const [current] = await tx.select().from(challenges)
         .where(and(eq(challenges.id, challengeId), eq(challenges.organizationId, organizationId))).for("update");
       if (!current) throw notFound("Challenge");
@@ -255,17 +284,16 @@ export class OrgService {
           throw conflict("CHALLENGE_LOCKED", `Cannot change ${[...locked, ...(gradingChanged ? ["grading configuration"] : [])].join(", ")} after submissions exist`);
         }
       }
-      if (input.githubIssueId) await this.assertIssueInOrg(organizationId, input.githubIssueId);
+      if (input.githubIssueId) await this.assertIssueInOrg(organizationId, input.githubIssueId, tx);
       const merged = {
         verificationType: input.verificationType ?? current.verificationType,
         challengeType: input.challengeType ?? current.challengeType,
         challengeConfig: input.challengeConfig ?? readConfig(current.challengeConfig),
       };
       validateForPublish(merged);
-      const [updated] = await tx.update(challenges).set({ ...input, updatedAt: this.deps.now() })
-        .where(eq(challenges.id, challengeId)).returning();
-      return this.orgChallengeDto(updated!, role);
+      await tx.update(challenges).set({ ...input, updatedAt: this.deps.now() }).where(eq(challenges.id, challengeId));
     });
+    return this.getChallenge(organizationId, role, challengeId);
   }
 
   async listSubmissions(organizationId: string, rawQuery: unknown) {

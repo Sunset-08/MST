@@ -132,6 +132,16 @@ async function main() {
     await db.update(users).set({ role: "platform_admin" }).where(eq(users.email, String(req.query.email ?? "")));
     res.json({ ok: true });
   });
+  // Dev-only: registers a pull request in the fake GitHub, opened now by the given login (there is no real GitHub here).
+  outer.post("/__e2e/pull", (req, res) => {
+    const { owner, repo, number, author, files, sha } = req.body as { owner: string; repo: string; number: number; author: string; files: string[]; sha: string };
+    github.pulls.set(`${owner}/${repo}#${number}`, {
+      number, url: `https://github.com/${owner}/${repo}/pull/${number}`, title: `Fix (#1)`, body: "Closes #1", state: "open", merged: false, author,
+      createdAt: new Date().toISOString(), baseRepository: `${owner}/${repo}`, baseRef: "main", headRepository: `${author}/${repo}`, headRef: "fix", headSha: sha,
+      mergeCommitSha: null, changedFiles: files,
+    });
+    res.json({ ok: true });
+  });
   outer.get("/__e2e/wallet", (_req, res) => { res.json({ address: testWallet.address }); });
   outer.post("/__e2e/sign", async (req, res) => {
     res.json({ signature: await testWallet.signMessage(String(req.body?.message ?? "")) });

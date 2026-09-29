@@ -116,6 +116,16 @@ export interface Challenge {
   githubRepoUrl?: string;
   githubIssueNumber?: number;
   githubIssueUrl?: string;
+  /** The repository's default branch (detail view only). */
+  githubDefaultBranch?: string;
+  /** The issue as it exists on GitHub (detail view only). */
+  githubIssue?: { number: number; title: string; body: string | null; url: string; state: string; labels: string[] };
+  /** The organization's own statement of the security issue, exactly as written. */
+  securityIssue?: string;
+  /** Files (or directories ending in "/") the solution is expected to change. */
+  targetFiles?: string[];
+  /** Code/Fix challenges: `pull_request` when tied to a GitHub repository, otherwise `patch`. */
+  submissionMode?: 'pull_request' | 'patch';
   attempts: number;
   solved: number;
   type: ChallengeType;
@@ -150,8 +160,8 @@ export interface Submission {
   type: ChallengeType;
   // Code/Fix submission
   patch?: string;
-  repositoryUrl?: string;
-  commitHash?: string;
+  /** Pull request to the challenge repository; the commit SHA is read from GitHub, never entered. */
+  pullRequestUrl?: string;
   explanation?: string;
   // Investigation submission
   selectedAnswers?: string[];
@@ -177,6 +187,9 @@ export interface VerificationResult {
   /** Pending / Processing / Confirmed / Failed once a reward exists; WalletRequired when a wallet must be linked. */
   mstRewardStatus?: string | null;
   streakUpdated: boolean;
+  /** Real head commit SHA read from GitHub for pull-request submissions. */
+  commitSha?: string;
+  pullRequestUrl?: string;
   reason?: string | null; // provided by backend if failed
   verifiedAt?: string | null;
 }

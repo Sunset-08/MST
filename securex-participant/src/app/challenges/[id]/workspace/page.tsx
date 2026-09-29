@@ -22,54 +22,62 @@ import { VerifiedCard, FailedCard, PendingCard } from '@/components/participant/
 // ============================================================
 
 function CodeFixForm({
+  challenge,
   value,
   onChange,
 }: {
+  challenge: Challenge;
   value: Record<string, string>;
   onChange: (k: string, v: string) => void;
 }) {
+  const viaPullRequest = challenge.submissionMode === 'pull_request' && !!challenge.githubRepo;
   return (
     <div className="space-y-4">
-      <div>
-        <label className="block text-sm font-semibold text-slate-300 mb-2">
-          Patch / Solution Code *
-        </label>
-        <p className="text-xs text-slate-500 mb-2">
-          Paste your complete fix. Include the full modified file(s) or a unified diff.
-        </p>
-        <textarea
-          id="submission-patch"
-          placeholder={`// Example:\nfunction sanitizeInput(input: string): string {\n  return DOMPurify.sanitize(input);\n}`}
-          value={value.patch ?? ''}
-          onChange={(e) => onChange('patch', e.target.value)}
-          className="code-area min-h-[240px]"
-          required
-        />
-      </div>
-      <div className="grid sm:grid-cols-2 gap-4">
+      {viaPullRequest && (
+        <div id="submission-target" className="rounded-xl border border-blue-400/20 bg-blue-400/5 p-4 space-y-2">
+          <p className="text-sm text-slate-300">
+            Solve this in{' '}
+            <a href={challenge.githubRepoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 font-mono">{challenge.githubRepo}</a>
+            {challenge.githubIssueNumber && challenge.githubIssueUrl && (
+              <> for issue <a href={challenge.githubIssueUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">#{challenge.githubIssueNumber}</a></>
+            )}
+            . Open a pull request to it{challenge.githubDefaultBranch ? <> (base branch <span className="font-mono">{challenge.githubDefaultBranch}</span>)</> : null} from your connected GitHub account
+            {challenge.targetFiles && challenge.targetFiles.length > 0 ? <>, changing <span className="font-mono">{challenge.targetFiles.join(', ')}</span></> : null}.
+          </p>
+          <p className="text-xs text-slate-500">The commit SHA is read from your pull request on GitHub automatically; you do not enter it.</p>
+        </div>
+      )}
+      {viaPullRequest ? (
         <div>
-          <label className="block text-sm font-semibold text-slate-300 mb-2">Repository / PR URL</label>
+          <label className="block text-sm font-semibold text-slate-300 mb-2">Pull request URL *</label>
           <input
-            id="submission-repo-url"
+            id="submission-pr-url"
             type="url"
-            placeholder="https://github.com/..."
-            value={value.repositoryUrl ?? ''}
-            onChange={(e) => onChange('repositoryUrl', e.target.value)}
+            placeholder={`https://github.com/${challenge.githubRepo}/pull/123`}
+            value={value.pullRequestUrl ?? ''}
+            onChange={(e) => onChange('pullRequestUrl', e.target.value)}
             className="sx-input"
+            required
           />
         </div>
+      ) : (
         <div>
-          <label className="block text-sm font-semibold text-slate-300 mb-2">Commit Hash</label>
-          <input
-            id="submission-commit"
-            type="text"
-            placeholder="abc1234..."
-            value={value.commitHash ?? ''}
-            onChange={(e) => onChange('commitHash', e.target.value)}
-            className="sx-input font-mono"
+          <label className="block text-sm font-semibold text-slate-300 mb-2">
+            Patch / Solution Code *
+          </label>
+          <p className="text-xs text-slate-500 mb-2">
+            Paste your complete fix. Include the full modified file(s) or a unified diff.
+          </p>
+          <textarea
+            id="submission-patch"
+            placeholder={`// Example:\nfunction sanitizeInput(input: string): string {\n  return DOMPurify.sanitize(input);\n}`}
+            value={value.patch ?? ''}
+            onChange={(e) => onChange('patch', e.target.value)}
+            className="code-area min-h-[240px]"
+            required
           />
         </div>
-      </div>
+      )}
       <div>
         <label className="block text-sm font-semibold text-slate-300 mb-2">Explanation *</label>
         <p className="text-xs text-slate-500 mb-2">
@@ -273,7 +281,7 @@ export default function ChallengeWorkspacePage({
       const pending = await submitAttempt(attempt.id, buildPayload(challenge));
       setResult(pending);
       // Rule-based challenges verify within moments; manual reviews stay Pending until a reviewer decides.
-      await waitForVerification(pending.submissionId, setResult);
+      await waitForVerification(pending.submissionId, (r) => setResult({ ...r, commitSha: pending.commitSha, pullRequestUrl: pending.pullRequestUrl }));
     } catch (err) {
       setSubmitError(errorMessage(err, 'Submission failed'));
       setResult(null);
@@ -333,6 +341,13 @@ export default function ChallengeWorkspacePage({
           <Link href="/challenges" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-white transition-colors mb-6">
             <ArrowLeft size={14} /> Back to Challenges
           </Link>
+          {result.commitSha && (
+            <div id="submission-commit-sha" className="sx-card p-4 mb-4 text-sm text-slate-400">
+              Commit recorded from GitHub:{' '}
+              <a href={result.pullRequestUrl ? `${result.pullRequestUrl}/commits/${result.commitSha}` : undefined} target="_blank" rel="noopener noreferrer"
+                className="font-mono text-blue-400 hover:text-blue-300 break-all">{result.commitSha}</a>
+            </div>
+          )}
           {result.status === 'Verified' && (
             <VerifiedCard result={result} challengeTitle={challenge.title} />
           )}
@@ -393,7 +408,7 @@ export default function ChallengeWorkspacePage({
         <div className="sx-card p-4">
           <div className="flex items-start gap-3">
             <Info size={16} className="text-blue-400 mt-0.5 flex-shrink-0" />
-            <p className="text-sm text-slate-400 leading-relaxed">{challenge.description}</p>
+            <p className="text-sm text-slate-400 leading-relaxed whitespace-pre-wrap">{challenge.description}</p>
           </div>
         </div>
 
@@ -409,7 +424,7 @@ export default function ChallengeWorkspacePage({
           </div>
 
           {(challenge.type === 'Fix' || challenge.type === 'Code') && (
-            <CodeFixForm value={formData} onChange={updateField} />
+            <CodeFixForm challenge={challenge} value={formData} onChange={updateField} />
           )}
           {challenge.type === 'Investigation' && (
             <InvestigationForm questions={challenge.questions ?? []} value={formData} onChange={updateField} />

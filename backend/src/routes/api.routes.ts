@@ -74,6 +74,7 @@ export function createOrgDashboardRouter({ services, authenticate, limiters }: R
   r.get("/activity", c.activity);
   r.get("/challenges", c.listChallenges);
   r.post("/challenges", admin, limiters.write, c.createChallenge);
+  r.get("/challenges/:id", admin, c.getChallenge);
   r.put("/challenges/:id", admin, c.updateChallenge);
   r.get("/submissions", admin, c.listSubmissions);
   r.post("/submissions/:id/review", admin, c.reviewSubmission);

@@ -141,7 +141,13 @@ export default function ChallengeDetailPage({
             <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-widest mb-3">
               Description
             </h2>
-            <p className="text-slate-300 leading-relaxed">{challenge.description}</p>
+            <p className="text-slate-300 leading-relaxed whitespace-pre-wrap">{challenge.description}</p>
+            {challenge.securityIssue && (
+              <div className="mt-4">
+                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">Security issue</h3>
+                <p className="text-slate-300 leading-relaxed whitespace-pre-wrap">{challenge.securityIssue}</p>
+              </div>
+            )}
           </div>
 
           {/* Meta info */}
@@ -167,8 +173,16 @@ export default function ChallengeDetailPage({
               <div className="flex items-start gap-3">
                 <Hash size={16} className="text-slate-500 mt-0.5 flex-shrink-0" />
                 <div>
-                  <p className="text-xs text-slate-600 mb-0.5">Security Issue</p>
-                  <p className="text-sm text-white">#{challenge.githubIssueNumber}</p>
+                  <p className="text-xs text-slate-600 mb-0.5">GitHub Issue</p>
+                  {challenge.githubIssueUrl ? (
+                    <a id="challenge-issue-link" href={challenge.githubIssueUrl} target="_blank" rel="noopener noreferrer"
+                      className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1">
+                      #{challenge.githubIssueNumber}{challenge.githubIssue?.title ? ` ${challenge.githubIssue.title}` : ''}
+                      <ExternalLink size={11} />
+                    </a>
+                  ) : (
+                    <p className="text-sm text-white">#{challenge.githubIssueNumber}</p>
+                  )}
                 </div>
               </div>
             )}
@@ -189,6 +203,46 @@ export default function ChallengeDetailPage({
               </div>
             </div>
           </div>
+
+          {challenge.githubRepo && (challenge.type === 'Fix' || challenge.type === 'Code') && (
+            <div id="challenge-target" className="rounded-xl border border-white/10 bg-white/[0.02] p-4 space-y-3">
+              <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-widest">What you are expected to change</h2>
+              <p className="text-sm text-slate-300">
+                Repository{' '}
+                <a href={challenge.githubRepoUrl ?? `https://github.com/${challenge.githubRepo}`} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 font-mono">
+                  {challenge.githubRepo}
+                </a>
+                {challenge.githubDefaultBranch && <> (branch <span className="font-mono">{challenge.githubDefaultBranch}</span>)</>}
+              </p>
+              {challenge.githubIssue && (
+                <div className="text-sm text-slate-400">
+                  <p>
+                    Issue{' '}
+                    <a href={challenge.githubIssue.url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">
+                      #{challenge.githubIssue.number} {challenge.githubIssue.title}
+                    </a>
+                  </p>
+                  {challenge.githubIssue.body && <p className="mt-2 whitespace-pre-wrap text-slate-400 border-l-2 border-white/10 pl-3">{challenge.githubIssue.body}</p>}
+                </div>
+              )}
+              {challenge.targetFiles && challenge.targetFiles.length > 0 && (
+                <div>
+                  <p className="text-xs text-slate-600 mb-1">Files to modify</p>
+                  <ul className="space-y-1">
+                    {challenge.targetFiles.map((f) => (
+                      <li key={f}>
+                        <a href={`${(challenge.githubRepoUrl ?? `https://github.com/${challenge.githubRepo}`).replace(/\/$/, '')}/${f.endsWith('/') ? 'tree' : 'blob'}/${challenge.githubDefaultBranch ?? 'main'}/${f.replace(/\/$/, '')}`}
+                          target="_blank" rel="noopener noreferrer" className="text-sm font-mono text-blue-400 hover:text-blue-300">{f}</a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <p className="text-xs text-slate-500">
+                Fork the repository, make your change and open a pull request to <span className="font-mono">{challenge.githubRepo}</span>. You will submit the pull request link; the commit is read from GitHub automatically.
+              </p>
+            </div>
+          )}
 
           {/* Tags */}
           {challenge.tags && challenge.tags.length > 0 && (

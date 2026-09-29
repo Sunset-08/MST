@@ -114,6 +114,8 @@ export interface ChallengeDraft {
 
   // Verification
   expectedSolutionCriteria: string;
+  /** Files (or directories ending in "/") a solution must change; one per line. */
+  targetFiles: string;
 
   // Questions
   questions: ChallengeQuestion[];
@@ -201,6 +203,7 @@ export function createEmptyDraft(): ChallengeDraft {
     maxAttempts: '',
     expiresAt: '',
     expectedSolutionCriteria: '',
+    targetFiles: '',
     questions: [],
     status: 'draft',
   };

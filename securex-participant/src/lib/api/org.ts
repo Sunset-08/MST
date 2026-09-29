@@ -40,6 +40,18 @@ export interface OrgMstStatusResponse {
   blockchain: { configured: boolean; reason?: string };
 }
 
+export interface OrgChallengeConfig {
+  securityIssue?: string;
+  expectedSolutionCriteria?: string;
+  targetFiles?: string[];
+  expiresAt?: string;
+  questions?: {
+    id: string; type: 'multiple_choice' | 'short_answer' | 'structured_response' | 'security_reasoning'; questionText: string;
+    options?: { id: string; text: string }[]; correctAnswer?: string; points: number;
+  }[];
+  acceptedAnswers?: Record<string, string[]>;
+}
+
 export interface OrgChallengeRow {
   id: string;
   title: string;
@@ -53,7 +65,11 @@ export interface OrgChallengeRow {
   maxAttempts: number | null;
   status: 'draft' | 'published' | 'archived';
   githubIssueId: string | null;
-  challengeConfig: { questions?: unknown[] };
+  githubRepositoryId: string | null;
+  githubRepository: string | null;
+  githubIssueNumber: number | null;
+  githubIssueTitle: string | null;
+  challengeConfig: OrgChallengeConfig;
   submissions?: number;
   verified?: number;
   attempts?: number;
@@ -101,6 +117,7 @@ export interface OrgGithubIssue {
   repository: string;
   number: number;
   title: string;
+  body?: string | null;
   state: string;
   url: string;
   labels: string[];
@@ -123,6 +140,7 @@ export const getOrgMstStatus = () => apiGet<OrgMstStatusResponse>('/org/mst-stat
 // ---- challenges ----
 export const listOrgChallenges = (params: { status?: string; page?: number; limit?: number } = {}) =>
   apiGet<PaginatedResponse<OrgChallengeRow>>(`/org/challenges${toQuery(params)}`, { org: true });
+export const getOrgChallenge = (id: string) => apiGet<OrgChallengeRow>(`/org/challenges/${encodeURIComponent(id)}`, { org: true });
 export const createOrgChallenge = (payload: Record<string, unknown>) =>
   apiPost<OrgChallengeRow>('/org/challenges', payload, { org: true });
 export const updateOrgChallenge = (id: string, payload: Record<string, unknown>) =>

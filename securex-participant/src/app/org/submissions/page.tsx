@@ -64,6 +64,17 @@ function SubmissionRow({ row, onReviewed }: { row: OrgSubmissionRow; onReviewed:
 
       {open && (
         <div className="space-y-3 border-t border-white/5 pt-3">
+          {typeof row.submissionData.commitSha === 'string' && (
+            <div className="text-xs text-slate-300 space-y-1">
+              <p>
+                Pull request:{' '}
+                <a href={String(row.submissionData.pullRequestUrl)} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">
+                  {String(row.submissionData.repository)} #{String(row.submissionData.pullRequestNumber)}
+                </a>{' '}by {String(row.submissionData.authorLogin)}
+              </p>
+              <p>Commit (read from GitHub): <span className="font-mono break-all">{row.submissionData.commitSha}</span></p>
+            </div>
+          )}
           <pre className="text-xs text-slate-300 bg-[var(--sx-bg-elevated)] rounded-lg p-3 overflow-auto max-h-72 whitespace-pre-wrap">
             {JSON.stringify(row.submissionData, null, 2)}
           </pre>

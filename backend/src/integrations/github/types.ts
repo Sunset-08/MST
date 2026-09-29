@@ -39,6 +39,25 @@ export interface GitHubIssueData {
   updatedAt: string;
 }
 
+/** A pull request as reported by GitHub; `headSha` is the real commit SHA at the time it was read. */
+export interface GitHubPullRequestData {
+  number: number;
+  url: string;
+  title: string;
+  body: string | null;
+  state: string;
+  merged: boolean;
+  author: string | null;
+  createdAt: string;
+  baseRepository: string;
+  baseRef: string;
+  headRepository: string | null;
+  headRef: string;
+  headSha: string;
+  mergeCommitSha: string | null;
+  changedFiles: string[];
+}
+
 export interface GitHubAppInfo {
   id: string;
   slug: string;
@@ -53,4 +72,5 @@ export interface GitHubAppClient {
   getInstallation(installationId: string): Promise<GitHubInstallation>;
   listInstallationRepositories(installationId: string): Promise<GitHubRepositoryData[]>;
   listRepositoryIssues(installationId: string, owner: string, repo: string, since?: Date): Promise<GitHubIssueData[]>;
+  getPullRequest(installationId: string, owner: string, repo: string, pullNumber: number): Promise<GitHubPullRequestData>;
 }

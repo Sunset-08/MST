@@ -51,7 +51,7 @@ describe("wallet linking", () => {
     const good = await w.signMessage(ch.body.data.message);
     const stolen = await ctx.api("POST", "/api/wallets/verify", { token: other.token, body: { address: w.address, signature: good, challengeToken: ch.body.data.challengeToken } });
     assert.equal(stolen.status, 400);
-    const tampered = await ctx.api("POST", "/api/wallets/verify", { token: u.token, body: { address: w.address, signature: good, challengeToken: ch.body.data.challengeToken.replace(/.$/, "A") } });
+    const tampered = await ctx.api("POST", "/api/wallets/verify", { token: u.token, body: { address: w.address, signature: good, challengeToken: ch.body.data.challengeToken.replace(/.$/, (c: string) => (c === "A" ? "B" : "A")) } });
     assert.equal(tampered.status, 400);
     ctx.clock.now = new Date(ctx.clock.now.getTime() + 11 * 60_000);
     const expired = await ctx.api("POST", "/api/wallets/verify", { token: u.token, body: { address: w.address, signature: good, challengeToken: ch.body.data.challengeToken } });

@@ -12,7 +12,8 @@ import * as schema from "../db/schema.js";
 import { ClaimError, type ClaimInput, type ClaimPreparation, type ClaimResult, type RewardClaimProvider } from "../integrations/blockchain/claims.js";
 import type { BlockchainRewardProvider, ProviderStatus, RewardInput, TransactionStatus } from "../integrations/blockchain/types.js";
 import { BlockchainNotConfiguredError } from "../integrations/blockchain/types.js";
-import type { GitHubAppClient, GitHubInstallation, GitHubIssueData, GitHubRepositoryData } from "../integrations/github/types.js";
+import type { GitHubAppClient, GitHubInstallation, GitHubIssueData, GitHubPullRequestData, GitHubRepositoryData } from "../integrations/github/types.js";
+import { AppError } from "../utils/http.js";
 import type { DeviceFlowPoll, DeviceFlowStart, GitHubUserAuth, GitHubUserProfile } from "../integrations/github/user-auth.js";
 import { createAuthMiddleware } from "../security/auth.js";
 import { AuthServiceError } from "../services/auth.service.js";
@@ -45,6 +46,14 @@ export class FakeGitHub implements GitHubAppClient {
   }
   async listInstallationRepositories(id: string) { this.calls.push(`repos:${id}`); return this.repos.get(id) ?? []; }
   async listRepositoryIssues(_id: string, owner: string, repo: string) { this.calls.push(`issues:${owner}/${repo}`); return this.issues.get(`${owner}/${repo}`) ?? []; }
+  /** Pull requests keyed `owner/repo#number`. */
+  pulls = new Map<string, GitHubPullRequestData>();
+  async getPullRequest(_id: string, owner: string, repo: string, number: number) {
+    this.calls.push(`pull:${owner}/${repo}#${number}`);
+    const pr = this.pulls.get(`${owner}/${repo}#${number}`);
+    if (!pr) throw new AppError(404, "GITHUB_NOT_FOUND", "GitHub resource not found or not accessible");
+    return pr;
+  }
 }
 
 export class FakeGitHubUser implements GitHubUserAuth {

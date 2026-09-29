@@ -9,10 +9,10 @@
 // ============================================================
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import type { ChallengeDraft, OrgAdmin, Organization, OrgWallet } from '@/lib/types/org';
+import type { ChallengeDraft, ChallengeQuestion, OrgAdmin, Organization, OrgChallengeType, OrgWallet } from '@/lib/types/org';
 import { createEmptyDraft } from '@/lib/types/org';
 import { errorMessage, setActiveOrganization } from '@/lib/api/client';
-import { createOrgChallenge, getOrganization } from '@/lib/api/org';
+import { createOrgChallenge, getOrgChallenge, getOrganization, updateOrgChallenge, type OrgChallengeRow } from '@/lib/api/org';
 import { useAuth } from '@/lib/context/AuthContext';
 
 const ORG_KEY = 'sx_org_id';
@@ -36,12 +36,64 @@ interface OrgContextValue {
   draft: ChallengeDraft;
   updateDraft: (patch: Partial<ChallengeDraft>) => void;
   resetDraft: () => void;
+  /** Id of the challenge being edited, or null when the form is creating a new one. */
+  editingId: string | null;
+  /** Status the challenge had when it was loaded for editing. */
+  editingStatus: 'draft' | 'published' | 'archived' | null;
+  /** Loads an existing challenge of this organization into the form. */
+  loadChallengeForEdit: (id: string) => Promise<{ success: boolean; error?: string }>;
   publishChallenge: (status?: 'published' | 'draft') => Promise<{ success: boolean; challengeId?: string; error?: string }>;
 }
 
 const OrgContext = createContext<OrgContextValue | null>(null);
 
 const toNumber = (v: number | '') => (v === '' ? undefined : Number(v));
+const splitLines = (v: string) => v.split('\n').map((l) => l.trim()).filter(Boolean);
+
+const TYPE_KEY: Record<string, OrgChallengeType> = { Code: 'code', Fix: 'fix', Investigation: 'investigation', SecurityReport: 'security_report' };
+
+/** datetime-local input value (local time) for an ISO instant. */
+function toLocalInput(iso?: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** Inverse of draftToPayload: fills the form from a stored challenge. */
+export function challengeToDraft(row: OrgChallengeRow): ChallengeDraft {
+  const cfg = row.challengeConfig ?? {};
+  const questions: ChallengeQuestion[] = (cfg.questions ?? []).map((q) => ({
+    id: q.id,
+    type: q.type,
+    questionText: q.questionText,
+    options: q.type === 'multiple_choice' ? q.options : undefined,
+    correctAnswer: q.type === 'multiple_choice' ? q.correctAnswer : undefined,
+    expectedAnswer: q.type !== 'multiple_choice' ? (cfg.acceptedAnswers?.[q.id]?.[0] ?? '') : undefined,
+    points: q.points,
+  }));
+  return {
+    title: row.title,
+    securityIssue: cfg.securityIssue ?? '',
+    description: row.description,
+    githubRepository: row.githubRepository ?? '',
+    githubRepositoryId: row.githubRepositoryId ?? '',
+    githubIssueId: row.githubIssueId ?? '',
+    githubIssueRef: row.githubIssueNumber ? `#${row.githubIssueNumber}` : '',
+    securityCategory: row.category,
+    difficulty: row.difficulty.toLowerCase() as ChallengeDraft['difficulty'],
+    challengeType: TYPE_KEY[row.challengeType] ?? (row.challengeType as OrgChallengeType),
+    verificationType: row.verificationType as ChallengeDraft['verificationType'],
+    pointsReward: row.pointsReward,
+    mstReward: row.mstReward,
+    maxAttempts: row.maxAttempts ?? '',
+    expiresAt: toLocalInput(cfg.expiresAt),
+    expectedSolutionCriteria: cfg.expectedSolutionCriteria ?? '',
+    targetFiles: (cfg.targetFiles ?? []).join('\n'),
+    questions,
+    status: row.status,
+  };
+}
 
 /** Maps the org portal's draft form onto the backend challenge contract. */
 export function draftToPayload(draft: ChallengeDraft, status: 'published' | 'draft') {
@@ -75,6 +127,7 @@ export function draftToPayload(draft: ChallengeDraft, status: 'published' | 'dra
     challengeConfig: {
       ...(draft.securityIssue.trim() ? { securityIssue: draft.securityIssue.trim() } : {}),
       ...(draft.expectedSolutionCriteria.trim() ? { expectedSolutionCriteria: draft.expectedSolutionCriteria.trim() } : {}),
+      ...(splitLines(draft.targetFiles).length ? { targetFiles: splitLines(draft.targetFiles) } : {}),
       ...(draft.expiresAt ? { expiresAt: new Date(draft.expiresAt).toISOString() } : {}),
       ...(questions.length ? { questions } : {}),
       ...(Object.keys(acceptedAnswers).length ? { acceptedAnswers } : {}),
@@ -89,6 +142,8 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
   const [wallet, setWallet] = useState<OrgWallet | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [draft, setDraft] = useState<ChallengeDraft>(createEmptyDraft());
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingStatus, setEditingStatus] = useState<'draft' | 'published' | 'archived' | null>(null);
 
   const memberships = auth.me?.organizations ?? [];
   const membership = memberships.find((m) => m.organizationId === orgId) ?? memberships[0] ?? null;
@@ -154,22 +209,43 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
   }, [auth]);
 
   const updateDraft = useCallback((patch: Partial<ChallengeDraft>) => setDraft((prev) => ({ ...prev, ...patch })), []);
-  const resetDraft = useCallback(() => setDraft(createEmptyDraft()), []);
+  const resetDraft = useCallback(() => {
+    setDraft(createEmptyDraft());
+    setEditingId(null);
+    setEditingStatus(null);
+  }, []);
+
+  const loadChallengeForEdit = useCallback(async (id: string) => {
+    try {
+      const row = await getOrgChallenge(id);
+      setDraft(challengeToDraft(row));
+      setEditingId(row.id);
+      setEditingStatus(row.status);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: errorMessage(err, 'Could not load the challenge') };
+    }
+  }, []);
 
   const publishChallenge = useCallback(
     async (status: 'published' | 'draft' = 'published') => {
       setIsLoading(true);
       try {
-        const created = await createOrgChallenge(draftToPayload(draft, status));
+        // Editing updates the existing challenge in place; it never creates a second one.
+        const saved = editingId
+          ? await updateOrgChallenge(editingId, draftToPayload(draft, status))
+          : await createOrgChallenge(draftToPayload(draft, status));
         setDraft(createEmptyDraft());
-        return { success: true, challengeId: created.id };
+        setEditingId(null);
+        setEditingStatus(null);
+        return { success: true, challengeId: saved.id };
       } catch (err) {
         return { success: false, error: errorMessage(err, 'Could not save the challenge') };
       } finally {
         setIsLoading(false);
       }
     },
-    [draft],
+    [draft, editingId],
   );
 
   const admin = useMemo<OrgAdmin | null>(
@@ -198,6 +274,9 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
         draft,
         updateDraft,
         resetDraft,
+        editingId,
+        editingStatus,
+        loadChallengeForEdit,
         publishChallenge,
       }}
     >

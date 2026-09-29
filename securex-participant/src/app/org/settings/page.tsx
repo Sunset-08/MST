@@ -96,12 +96,21 @@ export default function OrgSettingsPage() {
     }
   }
 
-  async function openAddRepos() {
+  // After granting more repositories on GitHub, coming back to this tab refreshes the list.
+  useEffect(() => {
+    if (!available) return;
+    const onVisible = () => { if (document.visibilityState === 'visible') void openAddRepos(true); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [available !== null]);
+
+  async function openAddRepos(keepSelection = false) {
     setBusy('repos');
     setGhMsg('');
     try {
       setAvailable((await getAvailableGithubRepos()).installations);
-      setPicked([]);
+      if (!keepSelection) setPicked([]);
     } catch (err) {
       setGhMsg(errorMessage(err, 'Could not load the repositories available to the GitHub App'));
     } finally {
@@ -337,7 +346,15 @@ export default function OrgSettingsPage() {
                             Give the app access to more repositories on GitHub
                           </a>
                         </p>
-                        {choices.length === 0 && <p className="text-sm text-slate-500">Every accessible repository is already connected.</p>}
+                        {choices.length === 0 && (
+                          <p className="text-sm text-slate-400">
+                            {inst.repositorySelection === 'selected'
+                              ? <>The GitHub App can only see the repositories you selected when installing it ({inst.repositories.length} so far, all connected). To add more, open{' '}
+                                  <a href={inst.manageUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">the installation on GitHub</a>,
+                                  add repositories under “Repository access”, save, then come back here.</>
+                              : 'Every repository the app can access is already connected.'}
+                          </p>
+                        )}
                         {choices.map((r) => (
                           <label key={r.githubRepoId} className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
                             <input type="checkbox" checked={picked.includes(r.githubRepoId)}
@@ -353,7 +370,10 @@ export default function OrgSettingsPage() {
                       style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)', color: 'white' }} onClick={() => void connectPicked()}>
                       {busy === 'repos' ? 'Connecting…' : `Connect ${picked.length || ''} selected`.trim()}
                     </button>
-                    <button className="sx-btn sx-btn-secondary sx-btn-sm" onClick={() => setAvailable(null)}>Cancel</button>
+                    <button className="sx-btn sx-btn-secondary sx-btn-sm" disabled={busy === 'repos'} onClick={() => void openAddRepos(true)}>
+                      <RefreshCw size={12} className={busy === 'repos' ? 'animate-spin' : ''} /> Refresh list
+                    </button>
+                    <button className="sx-btn sx-btn-secondary sx-btn-sm" onClick={() => setAvailable(null)}>Close</button>
                   </div>
                 </div>
               )}

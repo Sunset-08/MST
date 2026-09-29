@@ -15,6 +15,8 @@ export type ChallengeQuestion = z.infer<typeof questionSchema>;
 export const challengeConfigSchema = z.object({
   shortDescription: z.string().trim().max(300).optional(),
   securityIssue: z.string().trim().max(4000).optional(),
+  /** Files (or directories ending in "/") in the challenge repository that a solution is expected to change. */
+  targetFiles: z.array(z.string().trim().min(1).max(300)).max(20).optional(),
   tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
   expiresAt: z.iso.datetime({ offset: true }).optional(),
   questions: z.array(questionSchema).max(50).optional(),
@@ -37,6 +39,8 @@ export function publicConfig(raw: unknown) {
   const c = readConfig(raw);
   return {
     shortDescription: c.shortDescription,
+    securityIssue: c.securityIssue,
+    targetFiles: c.targetFiles ?? [],
     tags: c.tags ?? [],
     expiresAt: c.expiresAt ?? null,
     questions: (c.questions ?? []).map((q) => ({

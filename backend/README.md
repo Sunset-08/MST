@@ -244,3 +244,12 @@ factory (`src/app.ts`) against a fresh PGlite database built from `schema.ts`.
 - A funded MST Testnet deployer wallet to deploy the contracts, then `npm run chain:configure`.
 - An automated-test runner for `automated_test` challenges.
 - Per-organization MST deposits have no table in the current schema (`MST_ORG_MIN_FUNDING` defaults to 0).
+
+## Code/fix challenges and pull requests
+
+A challenge created from a GitHub issue is tied to that issue's repository. Participants submit the URL of a **pull request to that repository**
+(`pullRequestUrl`); there is no manual repository or commit-hash field. On submit the backend reads the pull request through the GitHub App
+(needs the app's *Pull requests: Read* permission) and only accepts it when it targets the challenge repository, was opened by the participant's
+connected GitHub account, was created after the challenge, and (if the organization set `targetFiles`) changes one of those files.
+The real head commit SHA comes from GitHub and is stored in `submissionData.commitSha`, which the solution hash and on-chain claim commitment cover.
+Challenges without a repository still take a `patch`.

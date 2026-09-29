@@ -12,7 +12,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { listOrgChallenges, type OrgChallengeRow } from '@/lib/api/org';
 import { errorMessage } from '@/lib/api/client';
-import { PlusCircle, Lock, Shield, TrendingUp } from 'lucide-react';
+import { PlusCircle, Shield, TrendingUp, Pencil, GitBranch } from 'lucide-react';
 
 const DIFFICULTY_STYLE: Record<string, { color: string; bg: string }> = {
   easy: { color: '#34d399', bg: 'rgba(52, 211, 153, 0.1)' },
@@ -26,10 +26,19 @@ export default function OrgChallengesPage() {
   const [challenges, setChallenges] = useState<OrgChallengeRow[]>([]);
   const [error, setError] = useState('');
 
+  const [loaded, setLoaded] = useState(false);
+
   useEffect(() => {
     if (!organization) return;
-    listOrgChallenges({ limit: 100 }).then((r) => setChallenges(r.data)).catch((e) => setError(errorMessage(e)));
-  }, [organization]);
+    const load = () => listOrgChallenges({ limit: 100 })
+      .then((r) => { setChallenges(r.data); setError(''); setLoaded(true); })
+      .catch((e) => setError(errorMessage(e)));
+    void load();
+    // Coming back to the tab (for example after creating a challenge elsewhere) shows the current list.
+    const onFocus = () => { if (document.visibilityState === 'visible') void load(); };
+    document.addEventListener('visibilitychange', onFocus);
+    return () => document.removeEventListener('visibilitychange', onFocus);
+  }, [organization?.id]);
 
   return (
     <OrgShell>
@@ -82,6 +91,11 @@ export default function OrgChallengesPage() {
                       <span className="text-xs text-slate-500">{ch.category}</span>
                     </div>
                     <h3 className="text-sm font-semibold text-white">{ch.title}</h3>
+                    {ch.githubRepository && (
+                      <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
+                        <GitBranch size={11} /> {ch.githubRepository}{ch.githubIssueNumber ? ` #${ch.githubIssueNumber}` : ''}
+                      </p>
+                    )}
                     <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
                       <span>{ch.challengeConfig.questions?.length ?? 0} questions</span>
                       <span>•</span>
@@ -89,6 +103,9 @@ export default function OrgChallengesPage() {
                     </div>
                   </div>
                   <div className="text-right space-y-1">
+                    <Link href={`/org/challenges/${ch.id}/edit`} id={`org-challenge-edit-${ch.id}`} className="sx-btn sx-btn-secondary sx-btn-sm gap-2 mb-1">
+                      <Pencil size={12} /> Edit
+                    </Link>
                     <div className="flex items-center gap-1 justify-end">
                       <TrendingUp size={12} className="text-violet-400" />
                       <span className="text-sm font-bold text-violet-400">{ch.pointsReward} pts</span>
@@ -101,7 +118,7 @@ export default function OrgChallengesPage() {
           })}
         </div>
 
-        {challenges.length === 0 && (
+        {loaded && challenges.length === 0 && (
           <div
             className="sx-card p-12 text-center"
             style={{ border: '1px dashed rgba(139, 92, 246, 0.2)' }}
