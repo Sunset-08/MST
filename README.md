@@ -1,7 +1,7 @@
 # SECUREX
 
 Gamified Web3 security platform: organizations publish security challenges from real GitHub issues, participants solve
-them, verified solutions earn Points (off-chain) and MST testnet rewards (on-chain).
+them, verified solutions earn Points (off-chain) and MST testnet rewards (on-chain).cwcwcwc
 
 | Folder | What it is |
 |---|---|
