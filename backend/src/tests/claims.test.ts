@@ -116,3 +116,78 @@ describe("reward claims", () => {
     assert.equal(typeof s.body.data.blockchain.onChainClaimsConfigured, "boolean");
   });
 });
+
+describe("reward payout readiness, honest result and vault funding", () => {
+  test("a verified but unclaimed reward is not reported as awarded; a confirmed one is, with its transaction", async () => {
+    ctx.claims.configured = true;
+    try {
+      const { u, reward } = await rewardedParticipant("claim_result");
+      const list = await ctx.api("GET", "/api/rewards", { token: u.token });
+      const submissionId = list.body.data[0].submissionId;
+      const before = await ctx.api("GET", `/api/submissions/${submissionId}/result`, { token: u.token });
+      assert.equal(before.body.data.mstAwarded, 0, "nothing is awarded before the on-chain transfer confirms");
+      assert.equal(before.body.data.mstPending, 5);
+      assert.equal(before.body.data.reward.id, reward.id);
+      assert.equal(before.body.data.reward.status, "Pending");
+      assert.equal(before.body.data.reward.transactionHash, undefined);
+
+      assert.equal((await ctx.api("POST", `/api/rewards/${reward.id}/claim`, { token: u.token, body: { txHash: TX } })).status, 200);
+      const after = await ctx.api("GET", `/api/submissions/${submissionId}/result`, { token: u.token });
+      assert.equal(after.body.data.mstAwarded, 5);
+      assert.equal(after.body.data.mstPending, 0);
+      assert.equal(after.body.data.reward.status, "Confirmed");
+      assert.equal(after.body.data.reward.transactionHash, `0x${"55".repeat(32)}`);
+      assert.match(after.body.data.reward.explorerUrl, /\/tx\/0x55/);
+      // Calling claim again (retry / double click) never pays twice.
+      assert.equal((await ctx.api("POST", `/api/rewards/${reward.id}/claim`, { token: u.token, body: { txHash: TX } })).status, 409);
+      assert.equal(ctx.claims.completed.filter((c) => c.rewardId === reward.id).length, 1);
+    } finally { ctx.claims.configured = false; }
+  });
+
+  test("readiness explains why payouts would fail; funding and cap changes are admin-only, bounded and confirmed on-chain", async () => {
+    const admin = await ctx.user("vaultadmin", "platform_admin");
+    const nobody = await ctx.user("vaultuser");
+    assert.equal((await ctx.api("GET", "/api/admin/rewards/readiness", { token: nobody.token })).status, 403);
+    const off = await ctx.api("GET", "/api/admin/rewards/readiness", { token: admin.token });
+    assert.equal(off.body.data.configured, false);
+
+    ctx.claims.configured = true;
+    const original = { ...ctx.claims.vault, roles: { ...ctx.claims.vault.roles } };
+    try {
+      await rewardedParticipant("claim_ready");
+      ctx.claims.vault.maxRewardWei = 10n ** 17n;          // 0.1 MSTC cap, but rewards are 5 MSTC
+      ctx.claims.vault.balanceWei = 10n ** 18n;            // 1 MSTC in the vault, unpaid rewards need more
+      ctx.claims.vault.roles.rewardDistributor = false;
+      const bad = await ctx.api("GET", "/api/admin/rewards/readiness", { token: admin.token });
+      assert.equal(bad.status, 200, JSON.stringify(bad.body));
+      assert.equal(bad.body.data.ready, false);
+      const text = bad.body.data.problems.join(" | ");
+      assert.match(text, /REWARD_DISTRIBUTOR_ROLE/);
+      assert.match(text, /caps a reward at 0\.1 MSTC/);
+      assert.match(text, /vault holds 1\.0 MSTC/);
+
+      const cap = await ctx.api("POST", "/api/admin/rewards/vault/cap", { token: admin.token, body: { maxRewardMstc: "5" } });
+      assert.equal(cap.status, 200, JSON.stringify(cap.body));
+      assert.equal(cap.body.data.readiness.vault.maxReward, "5.0");
+      ctx.claims.vault.roles.vaultAdmin = false;
+      const denied = await ctx.api("POST", "/api/admin/rewards/vault/cap", { token: admin.token, body: { maxRewardMstc: "6" } });
+      assert.equal(denied.body.error.code, "SIGNER_NOT_VAULT_ADMIN");
+      ctx.claims.vault.roles.vaultAdmin = true;
+
+      const funded = await ctx.api("POST", "/api/admin/rewards/vault/fund", { token: admin.token, body: { amountMstc: "20" } });
+      assert.equal(funded.status, 200, JSON.stringify(funded.body));
+      assert.equal(funded.body.data.transactionHash, `0x${"66".repeat(32)}`);
+      assert.equal(funded.body.data.readiness.vault.balance, "21.0");
+      for (const body of [{ amountMstc: "0" }, { amountMstc: "101" }, { amountMstc: "-1" }, { amountMstc: "1", extra: 1 }, {}]) {
+        assert.equal((await ctx.api("POST", "/api/admin/rewards/vault/fund", { token: admin.token, body })).status, 400, JSON.stringify(body));
+      }
+      ctx.claims.vault.signerBalanceWei = 10n ** 18n;      // would leave nothing for gas
+      const low = await ctx.api("POST", "/api/admin/rewards/vault/fund", { token: admin.token, body: { amountMstc: "1" } });
+      assert.equal(low.body.error.code, "SIGNER_BALANCE_TOO_LOW");
+      ctx.claims.failWith = new ClaimError("VAULT_FUNDING_FAILED", "The vault funding transaction reverted", 502);
+      ctx.claims.vault.signerBalanceWei = 50n * 10n ** 18n;
+      const reverted = await ctx.api("POST", "/api/admin/rewards/vault/fund", { token: admin.token, body: { amountMstc: "1" } });
+      assert.equal(reverted.status, 502, "a reverted funding transaction is an error, not a success");
+    } finally { ctx.claims.configured = false; ctx.claims.failWith = null; Object.assign(ctx.claims.vault, original); }
+  });
+});

@@ -103,7 +103,8 @@ describe("rewards", () => {
     const u = await ctx.user("withwallet");
     await link(u.token, Wallet.createRandom());
     const r = await solve(u.token, challengeId);
-    assert.equal(r.mstAwarded, 5);
+    assert.equal(r.mstAwarded, 0, "MSTC is not 'awarded' while the reward is unpaid");
+    assert.equal(r.mstPending, 5);
     assert.equal(r.mstRewardStatus, "Pending");
     const admin = await ctx.user("rewardadmin", "platform_admin");
     const processed = await ctx.api("POST", "/api/admin/rewards/process", { token: admin.token });

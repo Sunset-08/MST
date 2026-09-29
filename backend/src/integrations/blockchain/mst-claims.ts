@@ -1,11 +1,11 @@
 import { createHmac } from "node:crypto";
-import { AbiCoder, Contract, JsonRpcProvider, Wallet, getAddress, id as keccakId, keccak256, toUtf8Bytes, type ContractTransactionReceipt, type Log } from "ethers";
+import { AbiCoder, Contract, JsonRpcProvider, Wallet, formatEther, getAddress, id as keccakId, keccak256, toUtf8Bytes, type ContractTransactionReceipt, type Log } from "ethers";
 import type { AppConfig } from "../../config/env.js";
 import { canonicalJson } from "../../utils/crypto.js";
 import challengeRegistryAbi from "./abis/ChallengeRegistry.json";
 import rewardVaultAbi from "./abis/RewardVault.json";
 import submissionRegistryAbi from "./abis/SubmissionRegistry.json";
-import { ClaimError, type ClaimInput, type ClaimPreparation, type ClaimResult, type RewardClaimProvider } from "./claims.js";
+import { ClaimError, type ChainTx, type ClaimInput, type ClaimPreparation, type ClaimReadiness, type ClaimResult, type RewardClaimProvider } from "./claims.js";
 import type { ProviderStatus } from "./types.js";
 
 const abiCoder = AbiCoder.defaultAbiCoder();
@@ -132,8 +132,12 @@ export class MstRewardClaims implements RewardClaimProvider {
     }
 
     const [max, balance] = await Promise.all([vault.maxRewardPerSubmission() as Promise<bigint>, vault.vaultBalance() as Promise<bigint>]);
-    if (amountWei > max) throw new ClaimError("REWARD_ABOVE_VAULT_CAP", `Reward exceeds the vault's per-submission cap (${max} wei)`);
-    if (amountWei > balance) throw new ClaimError("REWARD_VAULT_UNDERFUNDED", "The reward vault does not hold enough funds for this reward yet", 503);
+    if (amountWei > max) {
+      throw new ClaimError("REWARD_ABOVE_VAULT_CAP", `This reward is ${formatEther(amountWei)} MSTC but the reward vault pays at most ${formatEther(max)} MSTC per submission. The platform admin must raise the vault cap.`);
+    }
+    if (amountWei > balance) {
+      throw new ClaimError("REWARD_VAULT_UNDERFUNDED", `This reward is ${formatEther(amountWei)} MSTC but the reward vault holds only ${formatEther(balance)} MSTC. The platform admin must fund the vault.`, 503);
+    }
 
     let registrationTx: string | undefined;
     if (!(await challenges.exists(idHash))) {
@@ -161,6 +165,46 @@ export class MstRewardClaims implements RewardClaimProvider {
       amountWei: amountWei.toString(),
       ...(registrationTx ? { registrationTx } : {}),
     };
+  }
+
+  async readiness(): Promise<ClaimReadiness> {
+    const { provider, signer, challenges, submissions, vault } = await this.ready();
+    const address = getAddress(await signer.getAddress());
+    const [signerBalance, vaultBalance, max, distributed, adminRole, distributorRole, verifierRole, challengeAdminRole] = await Promise.all([
+      provider.getBalance(address), vault.vaultBalance() as Promise<bigint>, vault.maxRewardPerSubmission() as Promise<bigint>, vault.totalDistributed() as Promise<bigint>,
+      vault.DEFAULT_ADMIN_ROLE() as Promise<string>, vault.REWARD_DISTRIBUTOR_ROLE() as Promise<string>,
+      submissions.VERIFIER_ROLE() as Promise<string>, challenges.CHALLENGE_ADMIN_ROLE() as Promise<string>,
+    ]);
+    const [vaultAdmin, rewardDistributor, verifier, challengeAdmin] = await Promise.all([
+      vault.hasRole(adminRole, address) as Promise<boolean>, vault.hasRole(distributorRole, address) as Promise<boolean>,
+      submissions.hasRole(verifierRole, address) as Promise<boolean>, challenges.hasRole(challengeAdminRole, address) as Promise<boolean>,
+    ]);
+    return {
+      signer: address, signerBalanceWei: signerBalance.toString(),
+      signerRoles: { vaultAdmin, rewardDistributor, verifier, challengeAdmin },
+      vault: { address: getAddress(this.cfg.rewardContractAddress!), balanceWei: vaultBalance.toString(), maxRewardWei: max.toString(), totalDistributedWei: distributed.toString() },
+      rewardWeiPerUnit: this.cfg.rewardWeiPerUnit,
+    };
+  }
+
+  fundVault(amountWei: bigint): Promise<ChainTx> {
+    return this.serialize(async () => {
+      const { vault } = await this.ready();
+      const tx = await vault.fund({ value: amountWei });
+      const receipt = (await tx.wait()) as ContractTransactionReceipt;
+      if (receipt.status !== 1) throw new ClaimError("VAULT_FUNDING_FAILED", "The vault funding transaction reverted", 502);
+      return { transactionHash: receipt.hash, blockNumber: receipt.blockNumber };
+    }).catch((e) => { throw asClaimError(e, "Funding the vault failed"); });
+  }
+
+  setMaxReward(maxRewardWei: bigint): Promise<ChainTx> {
+    return this.serialize(async () => {
+      const { vault } = await this.ready();
+      const tx = await vault.setMaxRewardPerSubmission(maxRewardWei);
+      const receipt = (await tx.wait()) as ContractTransactionReceipt;
+      if (receipt.status !== 1) throw new ClaimError("VAULT_CONFIG_FAILED", "The vault configuration transaction reverted", 502);
+      return { transactionHash: receipt.hash, blockNumber: receipt.blockNumber };
+    }).catch((e) => { throw asClaimError(e, "Updating the vault cap failed"); });
   }
 
   complete(input: ClaimInput & { txHash: string }): Promise<ClaimResult> {

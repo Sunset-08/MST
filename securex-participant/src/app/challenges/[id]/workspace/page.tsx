@@ -349,7 +349,7 @@ export default function ChallengeWorkspacePage({
             </div>
           )}
           {result.status === 'Verified' && (
-            <VerifiedCard result={result} challengeTitle={challenge.title} />
+            <VerifiedCard result={result} challengeTitle={challenge.title} onRewardChange={(reward) => setResult((r) => (r ? { ...r, reward, mstAwarded: reward.status === 'Confirmed' ? reward.mstAmount : 0, mstPending: reward.status === 'Confirmed' ? 0 : reward.mstAmount, mstRewardStatus: reward.status } : r))} />
           )}
           {result.status === 'Failed' && (
             <FailedCard result={result} onRetry={handleRetry} />

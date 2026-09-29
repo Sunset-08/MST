@@ -56,8 +56,24 @@ export class ClaimError extends Error {
   }
 }
 
+/** Non-secret state of the platform signer and the reward vault, so an operator can see why payouts would fail. */
+export interface ClaimReadiness {
+  signer: string;
+  signerBalanceWei: string;
+  signerRoles: { vaultAdmin: boolean; rewardDistributor: boolean; verifier: boolean; challengeAdmin: boolean };
+  vault: { address: string; balanceWei: string; maxRewardWei: string; totalDistributedWei: string };
+  rewardWeiPerUnit: string;
+}
+
+export interface ChainTx { transactionHash: string; blockNumber: number }
+
 export interface RewardClaimProvider {
   status(): ProviderStatus & { claimsConfigured: boolean };
   prepare(input: ClaimInput): Promise<ClaimPreparation>;
   complete(input: ClaimInput & { txHash: string }): Promise<ClaimResult>;
+  readiness(): Promise<ClaimReadiness>;
+  /** Sends `amountWei` from the platform signer wallet into the RewardVault (awaits the receipt). */
+  fundVault(amountWei: bigint): Promise<ChainTx>;
+  /** Sets the vault's per-submission cap (needs the vault admin role). */
+  setMaxReward(maxRewardWei: bigint): Promise<ChainTx>;
 }

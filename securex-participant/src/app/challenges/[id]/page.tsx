@@ -278,6 +278,12 @@ export default function ChallengeDetailPage({
             </div>
           </div>
 
+          {challenge.status === 'Verified' && (
+            <p className="text-xs text-slate-500">
+              MSTC for this challenge is paid on-chain after you claim it from your <Link href="/rewards" className="text-blue-400 hover:text-blue-300">rewards page</Link>.
+            </p>
+          )}
+
           {(challenge.maxAttempts || challenge.expiresAt) && (
             <p className="text-xs text-slate-500">
               {challenge.maxAttempts ? `Up to ${challenge.maxAttempts} attempts. ` : ''}

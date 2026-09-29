@@ -183,7 +183,12 @@ export interface VerificationResult {
   verificationType?: string;
   pointsAwarded: number; // 0 if Failed, actual amount if Verified
   reputationAwarded: number;
+  /** MSTC actually transferred and confirmed on-chain; 0 until then. */
   mstAwarded: number;
+  /** MSTC reserved for the participant but not yet paid (claimable). */
+  mstPending?: number;
+  /** The reward record, when one exists (claim + transaction details). */
+  reward?: Omit<Reward, 'challengeId' | 'challengeTitle' | 'createdAt'> | null;
   /** Pending / Processing / Confirmed / Failed once a reward exists; WalletRequired when a wallet must be linked. */
   mstRewardStatus?: string | null;
   streakUpdated: boolean;

@@ -101,6 +101,9 @@ export function createAdminRouter({ services, authenticate }: RouteDeps): Router
   r.get("/submissions", c.submissions);
   r.post("/submissions/:id/review", c.reviewSubmission);
   r.get("/rewards", c.rewards);
+  r.get("/rewards/readiness", c.rewardReadiness);
+  r.post("/rewards/vault/fund", c.fundVault);
+  r.post("/rewards/vault/cap", c.setVaultCap);
   r.post("/rewards/process", c.processRewards);
   r.post("/rewards/:id/refresh", c.refreshReward);
   r.get("/github", c.github);

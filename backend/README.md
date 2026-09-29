@@ -35,7 +35,7 @@ Production: `npm run build` then `npm start` (runs `dist/server.js`).
 | `GITHUB_CONNECTION_REQUIRED` | no | `false` lets participants start challenges without GitHub (default `true`) |
 | `MST_*` | for rewards | Blockchain configuration; see "Blockchain" |
 | `MST_VERIFIER_PRIVATE_KEY` | for rewards | Server-only key with the verifier and reward roles |
-| `MST_REWARD_WEI_PER_UNIT` | no | Wei per reward unit (default 0.001 tMSTC) |
+| `MST_REWARD_WEI_PER_UNIT` | no | Wei per whole MSTC of reward (default `1e18` = 1 MSTC) |
 
 Secrets are only read into the process. `GET /api/admin/settings` reports whether each integration is
 configured, never the values.
@@ -253,3 +253,21 @@ A challenge created from a GitHub issue is tied to that issue's repository. Part
 connected GitHub account, was created after the challenge, and (if the organization set `targetFiles`) changes one of those files.
 The real head commit SHA comes from GitHub and is stored in `submissionData.commitSha`, which the solution hash and on-chain claim commitment cover.
 Challenges without a repository still take a `patch`.
+
+## MSTC reward payouts
+
+A verified challenge creates a reward (`Pending`). It is **paid on-chain in two steps**: the participant's linked wallet signs one `submitProof` transaction
+(network gas only), then the backend verifies it on-chain and pays from the `RewardVault` (`distributeReward`). The reward becomes `Confirmed` only after the
+`RewardDistributed` event is seen in a successful receipt; the result API reports `mstAwarded` only for confirmed rewards (`mstPending` otherwise), and the
+transaction hash and explorer link are returned with the reward. Claiming twice never pays twice.
+
+`MST_REWARD_WEI_PER_UNIT` converts the challenge's whole-MSTC `mstReward` into wei (default `1000000000000000000`, i.e. 1 MSTC = 1e18 wei, 18 decimals).
+The vault refuses rewards above its per-submission cap and above its balance; the claim then fails with a message that says which one.
+
+Platform admin endpoints (`/api/admin/rewards/...`):
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /readiness` | Signer address/roles/balance, vault balance and cap, what unpaid rewards need, and a list of problems |
+| `POST /vault/fund` `{ "amountMstc": "5" }` | Send MSTC from the platform signer wallet into the vault (max 100; the signer keeps 1 MSTC for gas) |
+| `POST /vault/cap` `{ "maxRewardMstc": "2" }` | Set the per-submission cap (the signer must hold the vault admin role) |

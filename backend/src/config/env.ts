@@ -83,9 +83,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       challengeRegistryAddress: clean(env.MST_CHALLENGE_REGISTRY_ADDRESS),
       submissionRegistryAddress: clean(env.MST_SUBMISSION_REGISTRY_ADDRESS),
       verifierPrivateKey: clean(env.MST_VERIFIER_PRIVATE_KEY),
-      rewardWeiPerUnit: /^\d+$/.test(clean(env.MST_REWARD_WEI_PER_UNIT) ?? "") ? clean(env.MST_REWARD_WEI_PER_UNIT)! : "1000000000000000",
+      rewardWeiPerUnit: /^\d+$/.test(clean(env.MST_REWARD_WEI_PER_UNIT) ?? "") ? clean(env.MST_REWARD_WEI_PER_UNIT)! : "1000000000000000000", // 1 MSTC = 1e18 wei (18 decimals)
       rewardContractAbi: clean(env.MST_REWARD_CONTRACT_ABI),
-      explorerUrl: clean(env.MST_EXPLORER_URL),
+      explorerUrl: clean(env.MST_EXPLORER_URL) ?? "https://testnet.mstscan.com",
     },
   };
 }

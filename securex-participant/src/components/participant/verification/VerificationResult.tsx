@@ -9,16 +9,24 @@ import type { VerificationResult } from '@/lib/types';
 import { formatPoints, truncateAddress } from '@/lib/utils';
 import Link from 'next/link';
 import { explorerTxUrl } from '@/lib/chain/mst';
+import { RewardClaim } from '@/components/participant/wallet/RewardClaim';
+import type { Reward } from '@/lib/types';
 
 // -------- Verified --------
 
 export function VerifiedCard({
   result,
   challengeTitle,
+  onRewardChange,
 }: {
   result: VerificationResult;
   challengeTitle: string;
+  /** Called with the updated reward after an on-chain claim finishes. */
+  onRewardChange?: (reward: Reward) => void;
 }) {
+  const reward = result.reward ?? null;
+  const paid = reward?.status === 'Confirmed';
+  const claimable = reward && !paid && reward.walletAddress ? reward : null;
   return (
     <div className="verification-verified p-8 text-center space-y-6 animate-fade-in">
       {/* Icon */}
@@ -54,10 +62,44 @@ export function VerifiedCard({
         </div>
         <div className="bg-emerald-400/5 border border-emerald-400/15 rounded-xl p-4">
           <Coins size={20} className="text-emerald-400 mx-auto mb-2" />
-          <p className="text-2xl font-black text-emerald-400">+{result.mstAwarded}</p>
-          <p className="text-xs text-slate-500 mt-1">MSTC</p>
+          {paid || !reward ? (
+            <>
+              <p className="text-2xl font-black text-emerald-400">+{result.mstAwarded}</p>
+              <p className="text-xs text-slate-500 mt-1">MSTC{paid ? ' · paid' : ''}</p>
+            </>
+          ) : (
+            <>
+              <p className="text-2xl font-black text-amber-400">{reward.mstAmount}</p>
+              <p className="text-xs text-slate-500 mt-1">MSTC · not yet paid</p>
+            </>
+          )}
         </div>
       </div>
+
+      {/* On-chain payout: confirmed transfer, or the claim that starts it */}
+      {paid && reward?.transactionHash && (
+        <div id="mst-payout-confirmed" className="bg-emerald-400/5 border border-emerald-400/20 rounded-xl p-4 text-left text-sm text-slate-300 space-y-1">
+          <p><strong className="text-emerald-400">{reward.mstAmount} MSTC sent to your wallet</strong> ({truncateAddress(reward.walletAddress ?? '')}).</p>
+          <p className="text-xs text-slate-500">
+            Transaction{' '}
+            <a href={reward.explorerUrl ?? explorerTxUrl(reward.transactionHash)} target="_blank" rel="noopener noreferrer" className="font-mono text-blue-400 hover:text-blue-300 break-all">
+              {reward.transactionHash}
+            </a>
+          </p>
+        </div>
+      )}
+      {claimable && (
+        <div id="mst-payout-claim" className="bg-amber-400/5 border border-amber-400/20 rounded-xl p-4 text-left space-y-3">
+          <p className="text-sm text-slate-300">
+            <strong className="text-amber-400">{claimable.mstAmount} MSTC is reserved for you but has not been sent yet.</strong>{' '}
+            Claim it now: you sign one proof transaction from {truncateAddress(claimable.walletAddress ?? '')} (network gas only), then the platform pays the reward on-chain. It shows as paid only after the transfer is confirmed.
+          </p>
+          <RewardClaim
+            reward={{ ...claimable, challengeId: result.challengeId, challengeTitle, createdAt: '' }}
+            onClaimed={(r) => onRewardChange?.(r)}
+          />
+        </div>
+      )}
 
       {/* MST reward state */}
       {result.mstRewardStatus === 'WalletRequired' && (
@@ -66,7 +108,7 @@ export function VerifiedCard({
           Connect and link a wallet from your <Link href="/profile" className="underline text-blue-300">profile</Link>; the reward is created as soon as it is linked.
         </div>
       )}
-      {result.mstRewardStatus && result.mstRewardStatus !== 'WalletRequired' && (
+      {result.mstRewardStatus && result.mstRewardStatus !== 'WalletRequired' && !paid && (
         <p className="text-xs text-slate-500">MST reward status: <span className="text-slate-300">{result.mstRewardStatus}</span></p>
       )}
 
@@ -210,7 +252,10 @@ export function MSTRewardCard({
       </div>
 
       <div>
-        <p className="text-3xl font-black text-emerald-400">+{mstAmount} MSTC</p>
+        <p className={`text-3xl font-black ${status === 'Confirmed' ? 'text-emerald-400' : 'text-amber-400'}`}>
+          {status === 'Confirmed' ? `+${mstAmount} MSTC` : `${mstAmount} MSTC`}
+        </p>
+        {status !== 'Confirmed' && <p className="text-xs text-slate-500 mt-1">Not paid until the on-chain transfer confirms</p>}
       </div>
 
       <div className="flex items-center justify-between text-sm">

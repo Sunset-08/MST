@@ -35,7 +35,7 @@ const player = new Wallet(PLAYER_KEY, provider);
 const copycat = new Wallet(COPYCAT_KEY, provider);
 const verifier = new Wallet(VERIFIER_KEY, provider);
 
-const input = (n: number, wallet: Wallet, amount = 5): ClaimInput => ({
+const input = (n: number, wallet: Wallet, amount = 1): ClaimInput => ({
   rewardId: `reward-${n}`, submissionId: `submission-${n}`, challengeId: `challenge-${n}`, challengeTitle: `Challenge ${n}`,
   challengeUpdatedAt: "2026-09-01T00:00:00.000Z", submissionData: { structuredAnswers: { q1: "B" }, n }, recipientAddress: wallet.address, amount,
 });
@@ -64,7 +64,7 @@ async function main() {
   assert.equal(result.recipient, player.address);
   assert.ok(result.verificationTx, "platform verified on-chain");
   const after = await provider.getBalance(player.address);
-  assert.equal(after - before + (await gasCost(proofTx)), parseEther("0.005"), "vault paid exactly 5 units * 0.001 tMSTC to the participant");
+  assert.equal(after - before + (await gasCost(proofTx)), parseEther("1"), "vault paid exactly the promised 1 MSTC (18 decimals) to the participant");
   console.log(`  ✔ complete: verified + paid ${formatEther(BigInt(result.amountWei))} tMSTC to ${player.address} (tx ${result.rewardTx.slice(0, 12)}…)`);
 
   // 2. Idempotent retry returns the same payout without paying twice
@@ -89,13 +89,27 @@ async function main() {
   await expectClaimError("TX_NOT_MINED", () => claims.complete({ ...b, txHash: `0x${"9".repeat(64)}` }));
   await expectClaimError("VERIFIER_WALLET_CANNOT_CLAIM", () => claims.prepare(input(3, verifier)));
   await expectClaimError("REWARD_ABOVE_VAULT_CAP", () => claims.prepare(input(4, player, 100)));
-  const c = input(5, player, 5);
+  const c = input(5, player, 1);
   const prepC = await claims.prepare(c);
   const badReceipt = await submitProof(player, prepC);
-  await expectClaimError("PROOF_EVENT_MISSING", () => claims.complete({ ...input(5, player, 5), submissionData: { tampered: true }, txHash: badReceipt }));
+  await expectClaimError("PROOF_EVENT_MISSING", () => claims.complete({ ...input(5, player, 1), submissionData: { tampered: true }, txHash: badReceipt }));
   const okC = await claims.complete({ ...c, txHash: badReceipt });
   assert.equal(okC.recipient, player.address);
   console.log("  ✔ tampered submission content cannot redeem the proof; the genuine one can");
+
+  // 6. Operator visibility and funding against the real contracts
+  const r0 = await claims.readiness();
+  assert.equal(r0.signer, verifier.address);
+  assert.deepEqual(r0.signerRoles, { vaultAdmin: true, rewardDistributor: true, verifier: true, challengeAdmin: true });
+  assert.equal(r0.rewardWeiPerUnit, String(10n ** 18n));
+  const funded = await claims.fundVault(parseEther("3"));
+  const r1 = await claims.readiness();
+  assert.equal(BigInt(r1.vault.balanceWei) - BigInt(r0.vault.balanceWei), parseEther("3"), "vault funding is confirmed on-chain");
+  assert.match(funded.transactionHash, /^0x[0-9a-f]{64}$/);
+  await claims.setMaxReward(parseEther("7"));
+  assert.equal((await claims.readiness()).vault.maxRewardWei, parseEther("7").toString());
+  await claims.setMaxReward(BigInt(r0.vault.maxRewardWei));
+  console.log("  ✔ readiness reports signer roles and vault state; funding and cap changes confirm on-chain");
 
   const vault = new Contract(deployment.addresses.RewardVault, ["function vaultBalance() view returns (uint256)", "function totalDistributed() view returns (uint256)"], provider);
   console.log(`vault balance ${formatEther(await vault.vaultBalance())} tMSTC, distributed ${formatEther(await vault.totalDistributed())} tMSTC`);

@@ -1,4 +1,5 @@
-import { and, desc, eq, isNull, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { formatEther, parseEther } from "ethers";
 import { z } from "zod";
 import { challenges, rewards, submissions } from "../db/schema.js";
 import { ClaimError, type ClaimInput } from "../integrations/blockchain/claims.js";
@@ -98,6 +99,91 @@ export class RewardsService {
       return { reward: dto, onchainSubmissionId: result.onchainSubmissionId, verificationTx: result.verificationTx, proofTx: txHash, rewardTx: result.rewardTx };
     } catch (e) {
       await this.deps.db.update(rewards).set({ status: "pending" }).where(and(eq(rewards.id, reward.id), eq(rewards.status, "submitted"), isNull(rewards.transactionHash)));
+      throw toAppError(e);
+    }
+  }
+
+  /** Amounts an operator may move in one call (testnet-scale guard rail). */
+  private static readonly MAX_ADMIN_MSTC = 100;
+  private static readonly SIGNER_GAS_RESERVE_WEI = parseEther("1");
+
+  private parseMstc(value: unknown): bigint {
+    const { amountMstc } = parse(z.object({ amountMstc: z.string().regex(/^\d{1,6}(\.\d{1,6})?$/, "Use a decimal MSTC amount such as 5 or 0.5") }).strict(), value);
+    const wei = parseEther(amountMstc);
+    if (wei <= 0n || wei > parseEther(String(RewardsService.MAX_ADMIN_MSTC))) throw new AppError(400, "AMOUNT_OUT_OF_RANGE", `Amount must be between 0 and ${RewardsService.MAX_ADMIN_MSTC} MSTC`);
+    return wei;
+  }
+
+  /**
+   * Why rewards would or would not be payable right now: the platform signer's roles and balance, the vault's balance
+   * and per-reward cap, and what the unpaid rewards need. Read-only and free of secrets.
+   */
+  async adminReadiness() {
+    const status = this.deps.claims.status();
+    if (!status.claimsConfigured) return { configured: false, problems: [status.reason ?? "blockchain not configured"], claims: status };
+    const [pending] = await this.deps.db.select({
+      count: sql<number>`count(*)::int`, units: sql<number>`coalesce(sum(${rewards.amount}), 0)::int`, largest: sql<number>`coalesce(max(${rewards.amount}), 0)::int`,
+    }).from(rewards).where(inArray(rewards.status, ["pending", "failed", "submitted"]));
+    let r;
+    try {
+      r = await this.deps.claims.readiness();
+    } catch (e) {
+      throw toAppError(e);
+    }
+    const perUnit = BigInt(r.rewardWeiPerUnit);
+    const requiredWei = BigInt(pending?.units ?? 0) * perUnit;
+    const largestWei = BigInt(pending?.largest ?? 0) * perUnit;
+    const problems: string[] = [];
+    if (!r.signerRoles.verifier) problems.push("The platform signer lacks VERIFIER_ROLE on the SubmissionRegistry (cannot verify claims).");
+    if (!r.signerRoles.rewardDistributor) problems.push("The platform signer lacks REWARD_DISTRIBUTOR_ROLE on the RewardVault (cannot pay rewards).");
+    if (!r.signerRoles.challengeAdmin) problems.push("The platform signer lacks CHALLENGE_ADMIN_ROLE on the ChallengeRegistry (cannot register challenges on-chain).");
+    if (BigInt(r.vault.maxRewardWei) < largestWei) problems.push(`The vault caps a reward at ${formatEther(r.vault.maxRewardWei)} MSTC but the largest unpaid reward is ${formatEther(largestWei)} MSTC.`);
+    if (BigInt(r.vault.balanceWei) < requiredWei) problems.push(`The vault holds ${formatEther(r.vault.balanceWei)} MSTC but unpaid rewards need ${formatEther(requiredWei)} MSTC.`);
+    if (BigInt(r.signerBalanceWei) < parseEther("0.01")) problems.push("The platform signer wallet is almost out of MSTC for gas.");
+    return {
+      configured: true, ready: problems.length === 0, problems,
+      signer: { address: r.signer, balance: formatEther(r.signerBalanceWei), roles: r.signerRoles },
+      vault: { address: r.vault.address, balance: formatEther(r.vault.balanceWei), maxReward: formatEther(r.vault.maxRewardWei), totalDistributed: formatEther(r.vault.totalDistributedWei) },
+      rewardWeiPerUnit: r.rewardWeiPerUnit,
+      unpaid: { count: pending?.count ?? 0, units: pending?.units ?? 0, requiredMstc: formatEther(requiredWei) },
+      explorerUrl: this.deps.config.mst.explorerUrl ?? null,
+    };
+  }
+
+  /** Moves MSTC from the platform signer wallet into the RewardVault so rewards can be paid. */
+  async fundVault(body: unknown) {
+    const amount = this.parseMstc(body);
+    const before = await this.readinessOrThrow();
+    if (BigInt(before.signerBalanceWei) < amount + RewardsService.SIGNER_GAS_RESERVE_WEI) {
+      throw new AppError(409, "SIGNER_BALANCE_TOO_LOW", `The platform signer holds ${formatEther(before.signerBalanceWei)} MSTC; it must keep 1 MSTC for gas after funding`);
+    }
+    try {
+      const tx = await this.deps.claims.fundVault(amount);
+      return { funded: formatEther(amount), ...tx, explorerUrl: explorerTxUrl(this.deps.config.mst.explorerUrl, tx.transactionHash), readiness: await this.adminReadiness() };
+    } catch (e) {
+      throw toAppError(e);
+    }
+  }
+
+  /** Raises or lowers the vault's per-reward cap (the signer must be the vault admin). */
+  async setMaxReward(body: unknown) {
+    const { maxRewardMstc } = parse(z.object({ maxRewardMstc: z.string().regex(/^\d{1,6}(\.\d{1,6})?$/) }).strict(), body);
+    const wei = parseEther(maxRewardMstc);
+    if (wei <= 0n || wei > parseEther(String(RewardsService.MAX_ADMIN_MSTC))) throw new AppError(400, "AMOUNT_OUT_OF_RANGE", `Cap must be between 0 and ${RewardsService.MAX_ADMIN_MSTC} MSTC`);
+    const before = await this.readinessOrThrow();
+    if (!before.signerRoles.vaultAdmin) throw new AppError(403, "SIGNER_NOT_VAULT_ADMIN", "The platform signer is not the vault admin; change the cap from the admin wallet");
+    try {
+      const tx = await this.deps.claims.setMaxReward(wei);
+      return { maxRewardMstc, ...tx, explorerUrl: explorerTxUrl(this.deps.config.mst.explorerUrl, tx.transactionHash), readiness: await this.adminReadiness() };
+    } catch (e) {
+      throw toAppError(e);
+    }
+  }
+
+  private async readinessOrThrow() {
+    try {
+      return await this.deps.claims.readiness();
+    } catch (e) {
       throw toAppError(e);
     }
   }

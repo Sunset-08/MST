@@ -1,3 +1,4 @@
+import { explorerTxUrl } from "../integrations/blockchain/mst-provider.js";
 import { and, eq, ne } from "drizzle-orm";
 import { challengeAttempts, challenges, reputationEvents, rewards, submissions, verifications } from "../db/schema.js";
 import type { ServiceDeps } from "../services/deps.js";
@@ -129,8 +130,15 @@ export class VerificationService {
       verificationType: row.challenge.verificationType,
       pointsAwarded: event?.points ?? 0,
       reputationAwarded: event?.reputation ?? 0,
-      mstAwarded: reward?.amount ?? 0,
+      // MSTC counts as awarded only once the on-chain transfer is confirmed; until then it is a claimable reward.
+      mstAwarded: reward?.status === "confirmed" ? reward.amount : 0,
+      mstPending: reward && reward.status !== "confirmed" ? reward.amount : 0,
       mstRewardStatus: reward ? REWARD_STATUS_LABEL[reward.status] : verified && row.challenge.mstReward > 0 ? "WalletRequired" : null,
+      reward: reward ? {
+        id: reward.id, mstAmount: reward.amount, token: reward.token, network: reward.network, walletAddress: reward.walletAddress,
+        status: REWARD_STATUS_LABEL[reward.status], transactionHash: reward.transactionHash ?? undefined,
+        explorerUrl: explorerTxUrl(this.deps.config.mst.explorerUrl, reward.transactionHash) ?? undefined,
+      } : null,
       streakUpdated: meta.streakUpdated === true,
       reason: row.verification?.reason ?? null,
       submittedAt: iso(row.submission.submittedAt),

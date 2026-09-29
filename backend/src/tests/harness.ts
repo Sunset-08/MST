@@ -95,6 +95,26 @@ export class FakeClaims implements RewardClaimProvider {
       challengeId: `0x${"11".repeat(32)}`, solutionCommitment: `0x${"22".repeat(32)}`, abi: [], functionName: "submitProof", amountWei: String(input.amount * 1e15),
     };
   }
+  /** In-memory vault state for readiness/funding tests (the real contracts are exercised in the chain rehearsal). */
+  vault = { balanceWei: 10n * 10n ** 18n, maxRewardWei: 5n * 10n ** 18n, signerBalanceWei: 50n * 10n ** 18n, roles: { vaultAdmin: true, rewardDistributor: true, verifier: true, challengeAdmin: true } };
+  async readiness() {
+    if (!this.configured) throw new ClaimError("BLOCKCHAIN_NOT_CONFIGURED", "blockchain not configured", 503);
+    return {
+      signer: "0x0000000000000000000000000000000000000abc", signerBalanceWei: this.vault.signerBalanceWei.toString(), signerRoles: this.vault.roles,
+      vault: { address: "0x0000000000000000000000000000000000000002", balanceWei: this.vault.balanceWei.toString(), maxRewardWei: this.vault.maxRewardWei.toString(), totalDistributedWei: "0" },
+      rewardWeiPerUnit: String(10n ** 18n),
+    };
+  }
+  async fundVault(amountWei: bigint) {
+    if (this.failWith) throw this.failWith;
+    this.vault.balanceWei += amountWei; this.vault.signerBalanceWei -= amountWei;
+    return { transactionHash: `0x${"66".repeat(32)}`, blockNumber: 9 };
+  }
+  async setMaxReward(maxRewardWei: bigint) {
+    if (this.failWith) throw this.failWith;
+    this.vault.maxRewardWei = maxRewardWei;
+    return { transactionHash: `0x${"77".repeat(32)}`, blockNumber: 10 };
+  }
   async complete(input: ClaimInput & { txHash: string }): Promise<ClaimResult> {
     if (!this.configured) throw new ClaimError("BLOCKCHAIN_NOT_CONFIGURED", "blockchain not configured", 503);
     if (this.failWith) throw this.failWith;
